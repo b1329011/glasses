@@ -1,0 +1,38 @@
+﻿# ============================================================
+# requirements.txt — 地下街指標牌辨識 pipeline 相依套件
+# ============================================================
+# 安裝方式：
+#   pip install -r requirements.txt
+#
+# 注意事項：
+#   1. tensorrt 與 pycuda 僅在具備 NVIDIA GPU + CUDA 的環境可安裝，
+#      一般開發/CPU 環境會安裝失敗，屬正常現象。
+#      export.py / inference.py 皆已用 try/except 處理，缺少時會
+#      自動退回純 ONNX Runtime 推論，不影響基本流程。
+#   2. onnxruntime-gpu 若無 GPU 可改裝 onnxruntime（CPU 版）。
+# ============================================================
+
+# --- 核心：YOLO 訓練與匯出 ---
+ultralytics>=8.3.0        # YOLOv8 / YOLO11 官方套件（最新穩定版）
+
+# --- 資料增強 ---
+albumentations>=1.4.0     # 影像增強（亮度、模糊、遮擋等）
+opencv-python>=4.9.0      # 影像讀寫與攝影機串流
+numpy>=1.24.0
+pyyaml>=6.0               # 讀取 data.yaml
+
+# --- 模型匯出 / 推論 ---
+onnx>=1.16.0              # ONNX 模型格式
+onnxsim>=0.4.36           # ONNX 模型簡化（optional，export 時可用）
+onnxruntime-gpu>=1.17.0   # ONNX Runtime 推論（無 GPU 請改用 onnxruntime）
+
+# --- 視覺化 / 評估 ---
+matplotlib>=3.8.0         # PR curve / confusion matrix 繪圖
+seaborn>=0.13.0           # confusion matrix 熱圖美化
+pandas>=2.0.0
+
+# --- TensorRT（選用，需 NVIDIA 環境）---
+# 以下兩項通常需依 CUDA 版本另行從 NVIDIA 官方安裝，故預設註解掉。
+# 若環境支援，請解除註解或手動安裝對應版本。
+# tensorrt>=8.6.0
+# pycuda>=2024.1

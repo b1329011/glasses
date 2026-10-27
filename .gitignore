@@ -1,0 +1,27 @@
+# === 相依套件 / 可重建 ===
+**/node_modules/
+webapp/frontend/dist/
+
+# === Python ===
+**/__pycache__/
+*.pyc
+*.pyo
+
+# === 大型訓練資料 / 輸出（留在本機，不進 repo）===
+sign-detection/dataset/
+sign-detection/runs/
+sign-detection/models/
+
+# === 官方預訓練權重（ultralytics 會自動下載）===
+webapp/backend/yolov8n.pt
+webapp/backend/yolov8s.pt
+*.onnx
+
+# === 資料庫備份（保留 app.db 本體，排除備份）===
+webapp/backend/*.bak_*
+webapp/backend/app.db-journal
+
+# === 雜項 ===
+.DS_Store
+Thumbs.db
+*.log

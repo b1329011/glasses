@@ -1,0 +1,18 @@
+﻿# 後端 API 相依套件
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9      # 處理檔案上傳
+sqlalchemy>=2.0.0
+pymysql>=1.1.0               # MySQL 驅動
+cryptography>=42.0.0         # pymysql 某些 MySQL 認證方式需要
+
+# 影像 / 模型（與 sign-detection pipeline 共用）
+opencv-python>=4.9.0
+numpy>=1.24.0
+ultralytics>=8.3.0
+
+# 文字辨識 OCR
+# 主要：RapidOCR（PP-OCR 模型，中文招牌較強、輕量、跑 onnxruntime，不需 paddle）
+rapidocr-onnxruntime>=1.3.0
+# 備援：EasyOCR（RapidOCR 不可用時自動退回）
+easyocr>=1.7.0
