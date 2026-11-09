@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# 大檔案：用 python setup_assets.py 下載
+camera/models/*.onnx
+tools/
+*.part
+
+# 執行時產生
+output/camera/
+output/public_url.json
+
+# 本機設定
+.claude/

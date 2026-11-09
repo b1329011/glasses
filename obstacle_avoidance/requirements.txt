@@ -1,0 +1,13 @@
+# 模擬驗證（main.py）
+numpy>=1.24
+matplotlib>=3.7
+
+# 鏡頭即時偵測（server.py / camera/）
+opencv-python>=4.8
+onnxruntime>=1.16
+ultralytics>=8.0
+fastapi>=0.100
+uvicorn[standard]>=0.23
+
+# 選用：Intel RealSense 深度相機
+# pyrealsense2

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>手機連線</title>
+  <link rel="icon" href="m/icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <style>
+    .connect { max-width: 560px; margin: 40px auto; text-align: center; }
+    .qr { background: #fff; display: inline-block; padding: 16px; border-radius: 12px; margin: 16px 0; }
+    .qr img { display: block; width: 280px; height: 280px; image-rendering: pixelated; }
+    .url { word-break: break-all; font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--text-2); }
+    ol { text-align: left; color: var(--text-2); line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card connect">
+      <h1>用手機掃描開始</h1>
+      <div id="qr-box"><div class="empty">等待通道建立中…（由 python phone.py 啟動）</div></div>
+      <p class="url" id="url"></p>
+      <ol>
+        <li>手機相機掃描 QR code，用瀏覽器開啟（Android 用 Chrome、iPhone 用 Safari）</li>
+        <li>按「開始偵測」，允許使用相機</li>
+        <li>要安裝成 App：Android 點「安裝到主畫面」；iPhone 點「分享 → 加入主畫面」</li>
+        <li>把手機拿在胸口高度、鏡頭朝前方地面</li>
+      </ol>
+      <p class="muted small">免費通道每次啟動網址都不同；重新執行 phone.py 後請重新掃描。關閉 phone.py 視窗即停止。</p>
+    </section>
+  </main>
+  <script>
+    async function poll() {
+      try {
+        const r = await fetch('/api/public-url');
+        const d = await r.json();
+        if (d.phone_url) {
+          const qr = qrcode(0, 'M');
+          qr.addData(d.phone_url);
+          qr.make();
+          document.getElementById('qr-box').innerHTML = `<div class="qr">${qr.createImgTag(8, 0)}</div>`;
+          document.getElementById('url').textContent = d.phone_url;
+          return;
+        }
+      } catch { /* 後端還沒好 */ }
+      setTimeout(poll, 1500);
+    }
+    poll();
+  </script>
+</body>
+</html>

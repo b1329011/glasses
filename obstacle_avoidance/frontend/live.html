@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>即時鏡頭偵測</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231a1a19'/><rect x='6' y='6' width='20' height='5' rx='1' fill='%23fab219'/><path d='M6 22h11v4h9' stroke='%23fff' stroke-width='2.5' fill='none'/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="title-row">
+        <h1>障礙物避障模組</h1>
+        <span class="muted">鏡頭即時偵測：前方障礙物、懸空障礙物、斷崖、樓梯</span>
+      </div>
+      <div class="pipeline" aria-label="資料流">
+        <span class="step">① 影像<small>一般鏡頭／深度相機</small></span>
+        <span class="arrow">→</span>
+        <span class="step">② YOLO + 深度<small>物體類別・每個像素的距離</small></span>
+        <span class="arrow">→</span>
+        <span class="step">③ 幾何規則<small>障礙物高度帶・地面剖面</small></span>
+        <span class="arrow">→</span>
+        <span class="step">④ 融合輸出<small>震動 + 語音</small></span>
+      </div>
+      <nav>
+        <a href="index.html">模擬驗證</a>
+        <a href="live.html" class="active">即時鏡頭</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="controls">
+        <label class="field">影像來源
+          <select id="source">
+            <option value="webcam">瀏覽器鏡頭（單眼 AI 深度）</option>
+            <option value="file">影片／圖片檔（單眼 AI 深度）</option>
+            <option value="depthcam">深度相機 RealSense（實測深度）</option>
+          </select>
+        </label>
+        <label class="field" id="device-field">鏡頭
+          <select id="device"><option value="">預設鏡頭</option></select>
+        </label>
+        <label class="field" id="file-field" hidden>檔案
+          <input type="file" id="file" accept="video/*,image/*" />
+        </label>
+        <button id="start" class="btn primary big">▶ 開始偵測</button>
+        <label class="select"><input type="checkbox" id="speech" checked /> 語音播報</label>
+        <label class="select"><input type="checkbox" id="vibrate" checked /> 震動（手機）</label>
+        <label class="select" title="深度模型輸入較大，距離較準但每幀約慢 2 倍"><input type="checkbox" id="hq" /> 高精度深度（較慢）</label>
+        <label class="select" title="手機上用陀螺儀即時量測鏡頭傾角"><input type="checkbox" id="gyro" /> 陀螺儀自動傾角（手機）</label>
+        <button id="calib" class="btn" title="點畫面上一個已知距離的位置，輸入實際距離來修正">📏 距離校正</button>
+      </div>
+
+      <div class="geometry">
+        <label class="geo">鏡頭離地高度 <b id="height-val"></b>
+          <input type="range" id="height" min="0.5" max="2.0" step="0.05" />
+        </label>
+        <label class="geo">往下傾角 <b id="pitch-val"></b>
+          <input type="range" id="pitch" min="0" max="45" step="1" />
+        </label>
+        <label class="geo">水平視角 <b id="hfov-val"></b>
+          <input type="range" id="hfov" min="40" max="110" step="1" />
+        </label>
+        <div class="geo-note muted small" id="geo-note"></div>
+        <form class="calib-panel" id="calib-panel" hidden>
+          <span id="calib-hint">在畫面上點一個你量過距離的位置（地面上的膠帶標記、站著的人、箱子都可以）</span>
+          <span id="calib-input" hidden>
+            實際距離 <input type="number" id="calib-dist" min="0.3" max="10" step="0.05" value="2.0" /> 公尺
+            <button type="submit" class="btn primary">套用</button>
+          </span>
+          <button type="button" class="btn" id="calib-cancel">取消</button>
+        </form>
+        <div class="calib-msg small" id="calib-msg" hidden></div>
+      </div>
+
+      <div class="status-line small" id="status">尚未開始</div>
+    </section>
+
+    <div class="banner none" id="banner" role="status" aria-live="polite">
+      <div class="banner-level" id="banner-level">安全</div>
+      <div>
+        <div class="banner-msg" id="banner-msg">按「開始偵測」啟動鏡頭</div>
+        <div class="banner-sub" id="banner-sub"></div>
+      </div>
+    </div>
+
+    <div class="live-layout">
+      <section class="card media-card">
+        <div class="media-wrap" id="media-wrap">
+          <video id="video" playsinline muted></video>
+          <img id="still" alt="" hidden />
+          <canvas id="overlay"></canvas>
+          <div class="media-empty" id="media-empty">鏡頭畫面會顯示在這裡</div>
+        </div>
+        <ul class="legend-list small" style="margin-top:10px">
+          <li><i style="background:var(--s1)"></i>行進通道（地面投影）</li>
+          <li><i style="background:var(--warning)"></i>在行進路線上的物體</li>
+          <li><i style="background:var(--muted)"></i>路線外的物體</li>
+          <li><i style="background:var(--critical)"></i>地面邊緣（斷崖／樓梯）</li>
+        </ul>
+      </section>
+
+      <div class="side-col">
+        <section class="card">
+          <h3>鳥瞰雷達</h3>
+          <canvas id="radar" class="radar" aria-label="俯視障礙物分布"></canvas>
+          <ul class="legend-list small">
+            <li><i class="pt" style="background:var(--s3)"></i>前方障礙物（0.25~1 m 高）</li>
+            <li><i class="pt" style="background:#9b7bea"></i>懸空（1~2 m 高）</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h3>深度圖 <span class="muted small" id="depth-mode"></span></h3>
+          <img id="depth-img" class="depth-img" alt="深度圖：越亮越近" />
+          <div class="chart-note">越亮越近；黑色為超過 10 m 或無效</div>
+        </section>
+      </div>
+    </div>
+
+    <div class="hazard-cards" id="hazard-cards"></div>
+
+    <section class="card">
+      <div class="sec-head">
+        <h2>地面剖面（側視）</h2>
+        <span class="muted small">沿行進通道由近到遠的地面高度；平地 ≈ 0，台階呈階梯狀，斷崖會突然下降或消失</span>
+      </div>
+      <div class="chart-box"><div class="canvas-wrap"><canvas id="profile-chart"></canvas></div></div>
+    </section>
+
+    <section class="card">
+      <div class="sec-head">
+        <h2>警報紀錄</h2>
+        <button class="btn" id="clear-log">清除</button>
+      </div>
+      <div id="log-body"><div class="empty">尚無警報</div></div>
+      <details><summary>最新融合輸出 JSON</summary><pre class="json" id="event-json">—</pre></details>
+    </section>
+  </main>
+
+  <script src="live.js"></script>
+</body>
+</html>

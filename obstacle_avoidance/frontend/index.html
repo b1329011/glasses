@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>障礙物避障模組</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231a1a19'/><rect x='6' y='6' width='20' height='5' rx='1' fill='%23fab219'/><path d='M6 22h11v4h9' stroke='%23fff' stroke-width='2.5' fill='none'/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <!-- 由 main.py 產生；直接用瀏覽器開啟時靠它讀資料 -->
+  <script src="data.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="title-row">
+        <h1>障礙物避障模組</h1>
+        <span class="muted">深度相機 + ToF 融合偵測・模擬驗證</span>
+        <span class="muted small" id="generated"></span>
+      </div>
+      <div class="pipeline" aria-label="資料流">
+        <span class="step">① 感測器<small>眼鏡深度相機・手杖 ToF</small></span>
+        <span class="arrow">→</span>
+        <span class="step">② 偵測器<small>懸空障礙物・地面落差</small></span>
+        <span class="arrow">→</span>
+        <span class="step">③ 融合<small>取較高危險等級</small></span>
+        <span class="arrow">→</span>
+        <span class="step">④ 輸出<small>震動 + 語音提示</small></span>
+      </div>
+      <nav>
+        <a href="#sim">模擬結果</a>
+        <a href="#alerts">警報紀錄</a>
+        <a href="#live">即時模擬</a>
+        <a href="live.html">即時鏡頭偵測 →</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="sim" class="card">
+      <div class="sec-head">
+        <h2>模擬情境結果</h2>
+        <span class="muted small">python main.py 產生</span>
+      </div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div id="sim-body"></div>
+    </section>
+
+    <section id="alerts" class="card">
+      <div class="sec-head">
+        <h2>警報紀錄</h2>
+        <label class="select"><input type="checkbox" id="only-new" checked /> 只顯示新觸發</label>
+      </div>
+      <div id="alerts-body"></div>
+    </section>
+
+    <section id="live" class="card">
+      <div class="sec-head">
+        <h2>即時模擬</h2>
+        <span class="muted small">拖動滑桿，觀察偵測器判斷如何變化（與 Python 偵測器同一套邏輯與門檻）</span>
+      </div>
+      <div class="live-grid">
+        <div class="live-box">
+          <h3>懸空障礙物（深度相機）</h3>
+          <label class="slider-label" for="depth-slider">ROI 內最近距離 <b id="depth-value"></b></label>
+          <input type="range" id="depth-slider" min="0.3" max="8" step="0.1" value="5" />
+          <div class="scale" id="depth-scale"></div>
+          <div class="verdict" id="depth-verdict"></div>
+        </div>
+
+        <div class="live-box">
+          <h3>地面落差（手杖 ToF）</h3>
+          <label class="slider-label" for="tof-slider">目前 ToF 讀數 <b id="tof-value"></b></label>
+          <input type="range" id="tof-slider" min="60" max="250" step="1" value="100" />
+          <div class="btn-row">
+            <button id="tof-auto" class="btn primary">▶ 自動送出（5 Hz）</button>
+            <button id="tof-step" class="btn">送出一筆</button>
+            <button id="tof-spike" class="btn">模擬擺動突波</button>
+            <button id="tof-reset" class="btn">重設</button>
+          </div>
+          <div class="window-row">
+            <span class="muted small">滑動視窗（黃框＝異常讀數，不進入基準）</span>
+            <div class="chips" id="tof-window"></div>
+          </div>
+          <div class="stats" id="tof-stats"></div>
+          <div class="verdict" id="tof-verdict"></div>
+        </div>
+
+        <div class="live-box wide">
+          <h3>融合輸出（Navigation Agent 事件）</h3>
+          <pre class="json" id="fused-json"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
