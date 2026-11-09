@@ -25,6 +25,9 @@
 
   <div class="calib-tip" id="calib-tip" hidden>點畫面上一個量過距離的物體或地面位置</div>
 
+  <!-- 偵測清單：像 Minecraft 的字幕，列出看到的東西、方向與距離，看不到後慢慢淡出 -->
+  <ol class="subs" id="subs" aria-label="偵測到的物體"></ol>
+
   <section class="alert none" id="alert" aria-live="assertive">
     <div class="alert-level" id="alert-level">安全</div>
     <div class="alert-body">
@@ -36,9 +39,10 @@
   <div class="start" id="start-screen">
     <img src="icons/icon-192.png" alt="" width="88" height="88" />
     <h1>障礙物避障</h1>
-    <p>鏡頭對著前方地面，偵測障礙物、懸空物、斷崖與樓梯。<br />危險時會震動、語音提示並發出逼逼聲。</p>
+    <p>鏡頭對著前方地面，偵測障礙物、懸空物、斷崖與樓梯。<br />越接近危險震動越快，並以語音提示方向。</p>
     <button class="big-btn" id="start-btn">開始偵測</button>
     <p class="hint" id="start-hint"></p>
+    <p class="hint version" id="version"></p>
     <button class="link-btn" id="install-btn" hidden>安裝到主畫面</button>
     <p class="hint" id="ios-hint" hidden>iPhone：點 Safari 下方「分享」→「加入主畫面」即可安裝</p>
   </div>
@@ -56,13 +60,15 @@
         <input type="range" id="hfov" min="40" max="110" step="1" />
       </label>
       <label class="toggle"><input type="checkbox" id="gyro" checked /> 用陀螺儀自動量傾角</label>
-      <label class="toggle"><input type="checkbox" id="beep" checked /> 危險時逼逼聲</label>
-      <label class="toggle"><input type="checkbox" id="speech" checked /> 語音播報</label>
-      <label class="toggle"><input type="checkbox" id="vibrate" checked /> 震動</label>
+      <label class="toggle"><input type="checkbox" id="vibrate" checked /> 震動警示（越緊急震越快）</label>
+      <label class="toggle"><input type="checkbox" id="toneFallback" checked /> 手機不支援震動時改用提示音</label>
+      <p class="hint" id="vibrate-note"></p>
+      <label class="toggle"><input type="checkbox" id="speech" checked /> 語音播報（只講請停下與 2.5 公尺內的東西）</label>
+      <label class="toggle"><input type="checkbox" id="speakAhead" /> 2.5～5.5 公尺的東西也唸出來</label>
       <label class="toggle"><input type="checkbox" id="hq" /> 高精度深度（較慢）</label>
       <div class="sheet-btns">
         <button type="button" class="btn" id="calib-btn">📏 距離校正</button>
-        <button type="button" class="btn" id="test-beep">試聽逼逼聲</button>
+        <button type="button" class="btn" id="test-vibrate">測試震動節奏</button>
         <button type="button" class="btn" id="stop-btn">停止偵測</button>
       </div>
       <p class="hint" id="calib-msg"></p>

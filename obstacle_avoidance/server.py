@@ -59,12 +59,12 @@ def public_url(request: Request):
 @app.on_event("startup")
 def load_models():
     global models
-    print("載入模型中（YOLOv8n + Depth Anything V2 Small）…")
+    print("載入模型中（物體偵測 + Depth Anything V2 Small）…")
     models = Models()
     warm = np.zeros((240, 320, 3), np.uint8)  # 暖機：第一次推論特別慢
     models.depth.predict(warm)
     models.detect_objects(warm)
-    print("模型載入完成")
+    print(f"模型載入完成：{models.detector.name}")
 
 
 @app.get("/api/status")
@@ -94,6 +94,8 @@ def _apply_config(analyzer, text):
                                   reset=not msg.get("live"))
         if msg.get("depth_quality"):
             analyzer.set_depth_quality(msg["depth_quality"])
+        if "speak_ahead" in msg:
+            analyzer.planner.speak_ahead = bool(msg["speak_ahead"])
         return {"type": "config", "geometry": analyzer.geometry_dict(), "depth_quality": analyzer.depth_quality}
     if msg.get("type") == "calibrate_distance":
         try:
@@ -171,6 +173,15 @@ async def ws_depthcam(ws: WebSocket):
         source.close()
 
 
+@app.middleware("http")
+async def no_stale_frontend(request: Request, call_next):
+    """前端檔案加上 no-cache：瀏覽器可以快取，但每次都要先問伺服器有沒有新版（改完程式手機才會更新）。"""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.mount("/", StaticFiles(directory=ROOT / "frontend", html=True), name="frontend")
 
 
@@ -189,7 +200,8 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="鏡頭即時偵測後端")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8010, help="預設 8010（8000 留給 sign_detector 後端）")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8010)),
+                    help="預設 8010（8000 留給 sign_detector 後端）；也可用環境變數 PORT 指定")
     ap.add_argument("--ssl-certfile", help="https 憑證（手機連線用）")
     ap.add_argument("--ssl-keyfile")
     args = ap.parse_args()

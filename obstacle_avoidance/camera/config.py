@@ -12,6 +12,9 @@ from pathlib import Path
 MODEL_DIR = Path(__file__).resolve().parent / "models"
 DEPTH_MODEL_PATH = MODEL_DIR / "depth_anything_v2_small.onnx"
 YOLO_MODEL_PATH = MODEL_DIR / "yolov8n.pt"
+# YOLO-World 自訂詞彙模型（python -m camera.build_world_model 產生）；存在時優先使用，可辨識手扶梯、樓梯、柱子等
+WORLD_MODEL_PATH = MODEL_DIR / "yolo_world_obstacle.pt"
+USE_WORLD_MODEL = True        # False：改用 YOLOv8n（每幀約快 15%，但認不出手扶梯、柱子、三角錐等）
 
 # ---------- 相機幾何（前端可即時調整） ----------
 CAMERA_HEIGHT_M = 1.5        # 鏡頭離地高度：眼鏡約 1.5~1.6 m；手持手機約 1.2 m
@@ -81,3 +84,76 @@ LABEL_ZH = {
     "horse": "馬", "sheep": "羊", "cow": "牛", "keyboard": "鍵盤", "mouse": "滑鼠", "cell phone": "手機",
     "microwave": "微波爐", "oven": "烤箱", "sink": "水槽", "train": "火車", "boat": "船",
 }
+
+# ================= 警示規劃（camera/alert_planner.py） =================
+#
+# 物體分類：(類別, 中文名稱)。類別決定優先順序；不在表內的物體不會發出警示。
+# 英文名稱同時是 YOLO-World 的文字提示（WORLD_CLASSES），COCO 名稱也列在這裡以支援 YOLOv8n。
+OBJECT_TABLE = {
+    # 車輛：會移動、撞到最嚴重
+    "car": ("vehicle", "汽車"), "bus": ("vehicle", "公車"), "truck": ("vehicle", "卡車"),
+    "motorcycle": ("vehicle", "機車"), "scooter": ("vehicle", "機車"), "bicycle": ("vehicle", "腳踏車"),
+    "train": ("vehicle", "列車"),
+    # 行人與動物
+    "person": ("person", "行人"), "dog": ("person", "狗"), "stroller": ("person", "嬰兒車"),
+    "wheelchair": ("person", "輪椅"),
+    # 樓梯與手扶梯（語意偵測；方向與距離由深度決定）
+    "escalator": ("stairs", "手扶梯"), "stairs": ("stairs", "樓梯"),
+    # 固定障礙物：柱子、路障等
+    "pole": ("fixed", "柱子"), "pillar": ("fixed", "柱子"), "traffic cone": ("fixed", "三角錐"),
+    "barrier": ("fixed", "路障"), "bollard": ("fixed", "路樁"), "trash can": ("fixed", "垃圾桶"),
+    "fire hydrant": ("fixed", "消防栓"), "tree": ("fixed", "樹"), "door": ("fixed", "門"),
+    "parking meter": ("fixed", "停車計費器"), "stop sign": ("fixed", "標誌桿"),
+    # 一般物品
+    "bench": ("object", "長椅"), "chair": ("object", "椅子"), "table": ("object", "桌子"),
+    "dining table": ("object", "桌子"), "potted plant": ("object", "盆栽"), "suitcase": ("object", "行李箱"),
+    "box": ("object", "箱子"), "shopping cart": ("object", "推車"), "couch": ("object", "沙發"),
+    # 懸空物（招牌）
+    "signboard": ("overhead", "招牌"),
+}
+WORLD_CLASSES = [
+    "person", "car", "bus", "truck", "motorcycle", "scooter", "bicycle", "dog", "stroller", "wheelchair",
+    "escalator", "stairs", "pole", "pillar", "traffic cone", "barrier", "bollard", "trash can", "fire hydrant",
+    "tree", "door", "bench", "chair", "table", "potted plant", "suitcase", "box", "shopping cart", "signboard",
+]
+
+# 類別優先順序（數字越大越優先）。同一個距離區間內，先比優先順序，再比距離。
+CATEGORY_PRIORITY = {
+    "drop": 100,      # 斷崖、大落差：會跌落
+    "stairs": 90,     # 樓梯、手扶梯
+    "vehicle": 80,    # 車輛
+    "wall": 70,       # 牆壁、大面積障礙（深度幾何判斷）
+    "overhead": 65,   # 頭部高度的懸空物
+    "person": 60,     # 行人、動物
+    "fixed": 55,      # 柱子、三角錐等固定物
+    "object": 50,     # 椅子、箱子等一般物品
+    "obstacle": 45,   # 深度偵測到但認不出是什麼的東西
+    "step": 40,       # 單一台階、路緣
+}
+
+# 距離區間（公尺）：stop＝直接說「請停下」；near＝快接近；ahead＝提早告知方向（2.5~5.5 m）
+STOP_DISTANCE_M = 1.2
+NEAR_DISTANCE_M = 2.5
+AHEAD_DISTANCE_M = 5.5
+ZONE_HYSTERESIS_M = 0.3          # 離開某區間要多退這麼多，避免在邊界來回跳
+DROP_STOP_DISTANCE_M = 2.0       # 斷崖／大落差在此距離內 → 請停下
+
+# 方向：物體中心偏離正前方的角度
+SIDE_ANGLE_DEG = 12              # 超過 ±12° 算「左前方／右前方」
+AVOID_HALF_WIDTH_M = 1.0         # 左右 1 m 內的物體才可能擋路（通道兩側再加餘裕），之外不警示
+WALL_MIN_WIDTH_M = 1.2           # 同一距離的障礙點橫跨超過 1.2 m、高度超過 0.8 m → 牆壁
+WALL_MIN_HEIGHT_M = 0.8
+
+# 語音政策：畫面下方會列出所有看到的東西；語音只講要緊的
+SPEAK_AHEAD = False              # 2.5~5.5 m 的「提早告知」是否也唸出來（預設只列在畫面上）
+MIN_SPEECH_GAP_S = 4.0           # 兩次播報至少間隔 4 秒（「請停下」與變得更近不受限）
+DEDUPE_S = 10.0                  # 10 秒內唸過「同類東西、同方向」就不再唸（避免編號變動造成重複）
+LIST_MAX_DISTANCE_M = 8.0        # 畫面下方清單列出的最遠距離
+TRACK_MAX_AGE_S = 1.5            # 物體漏偵測 1.5 秒內再出現，仍視為同一個（編號不變）
+
+# 語音節流：同一個危險不重複唸
+REPEAT_STOP_S = 3.0              # 「請停下」持續時每 3 秒重複
+REPEAT_NEAR_S = 10.0             # near 區間同一目標每 10 秒最多一次
+FORGET_AFTER_S = 6.0             # 目標消失超過 6 秒，再出現才重新播報
+AHEAD_REANNOUNCE_DROP_M = 1.5    # ahead 區間同一目標距離縮短 1.5 m 以上才再唸一次
+

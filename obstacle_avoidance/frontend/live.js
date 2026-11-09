@@ -6,8 +6,10 @@ const C = {
   text: css('--text'), text2: css('--text-2'), muted: css('--muted'), grid: css('--grid'), border: css('--border'),
   hanging: '#9b7bea',
 };
-const LEVEL_COLOR = { critical: C.critical, warning: C.warning, none: C.good };
-const LEVEL_ZH = { critical: '危險', warning: '注意', none: '安全' };
+const LEVEL_COLOR = { critical: C.critical, warning: C.warning, notice: C.s1, none: C.good };
+const LEVEL_ZH = { critical: '停下', warning: '注意', notice: '提醒', none: '安全' };
+const VIB_ZH = { strong: '急促震動', medium: '每秒震動', light: '輕震一下' };
+const ZONE_ZH = { stop: '太近（< 1.2 m）', near: '接近（1.2~2.5 m）', ahead: '提早告知（2.5~5.5 m）' };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
@@ -291,8 +293,9 @@ function renderBanner(ev) {
   $('banner-msg').textContent = ev.action_required.audio_message || '前方安全';
   const d = ev.data;
   const parts = [];
-  if (d.obstacle_type) parts.push(`震動：${ev.action_required.vibration === 'strong' ? '強' : '輕'}`);
-  if (d.others?.length) parts.push(`另有 ${d.others.length} 項危險`);
+  if (d.zone) parts.push(ZONE_ZH[d.zone]);
+  if (ev.action_required.vibration) parts.push(VIB_ZH[ev.action_required.vibration]);
+  if (d.others?.length) parts.push(`另有 ${d.others.length} 項：${d.others.map((o) => o.label).join('、')}`);
   $('banner-sub').textContent = parts.join('・');
 }
 
@@ -526,35 +529,28 @@ function renderProfile(r) {
 
 // ---------- 語音、震動、紀錄 ----------
 
+// 後端的警示規劃已經做了節流：speak = true 才唸，紀錄也只記有播報的
 function handleAlert(ev) {
-  const key = ev.priority === 'none' ? null : `${ev.priority}|${ev.data.obstacle_type}`;
-  const now = Date.now();
-  const changed = key !== state.lastKey;
-  const repeat = key && ev.priority === 'critical' && now - state.lastSpoken > 4000;
-  if (key && (changed || repeat)) {
-    if ($('speech').checked && window.speechSynthesis) {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(ev.action_required.audio_message);
-      u.lang = 'zh-TW';
-      u.rate = 1.15;
-      speechSynthesis.speak(u);
-    }
-    if ($('vibrate').checked && navigator.vibrate) {
-      navigator.vibrate(ev.action_required.vibration === 'strong' ? [250, 100, 250] : [100]);
-    }
-    state.lastSpoken = now;
-    if (changed) {
-      state.log.unshift({ time: new Date().toLocaleTimeString('zh-TW', { hour12: false }), ev });
-      state.log = state.log.slice(0, 50);
-      renderLog();
-    }
+  const act = ev.action_required;
+  if (!act.speak || !act.audio_message) return;
+  if ($('speech').checked && window.speechSynthesis) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(act.audio_message);
+    u.lang = 'zh-TW';
+    u.rate = 1.15;
+    speechSynthesis.speak(u);
   }
-  state.lastKey = key;
+  if ($('vibrate').checked && navigator.vibrate) {
+    navigator.vibrate(act.urgency >= 3 ? [180, 120, 180, 120, 180] : act.urgency === 2 ? [150] : [80]);
+  }
+  state.log.unshift({ time: new Date().toLocaleTimeString('zh-TW', { hour12: false }), ev });
+  state.log = state.log.slice(0, 50);
+  renderLog();
 }
 
-const TYPE_ZH = {
-  front_obstacle: '前方障礙物', hanging_obstacle: '懸空障礙物', cliff: '斷崖／大落差', stairs_down: '向下樓梯',
-  stairs_up: '向上樓梯', step_down: '向下階差', step_up: '向上階差',
+const CATEGORY_ZH = {
+  drop: '落差', stairs: '樓梯／手扶梯', vehicle: '車輛', wall: '牆壁', overhead: '懸空物', person: '行人',
+  fixed: '固定物', object: '物品', obstacle: '未知障礙', step: '台階',
 };
 
 function renderLog() {
@@ -563,14 +559,16 @@ function renderLog() {
     return;
   }
   $('log-body').innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>時間</th><th>類型</th><th>等級</th><th class="num">距離</th><th>震動</th><th>語音提示</th></tr></thead>
+    <thead><tr><th>時間</th><th>類別</th><th>目標</th><th>等級</th><th class="num">距離</th><th>震動</th><th>語音提示</th><th>為何播報</th></tr></thead>
     <tbody>${state.log.map(({ time, ev }) => `<tr>
       <td class="muted">${time}</td>
-      <td>${esc(TYPE_ZH[ev.data.obstacle_type] || ev.data.obstacle_type)}${ev.data.label && ev.data.obstacle_type === 'front_obstacle' ? `（${esc(ev.data.label)}）` : ''}</td>
-      <td><span class="badge ${ev.priority}">${ev.priority}</span></td>
+      <td>${esc(CATEGORY_ZH[ev.data.category] || ev.data.category)}</td>
+      <td>${esc(ev.data.label)}</td>
+      <td><span class="badge ${ev.priority}">${LEVEL_ZH[ev.priority]}</span></td>
       <td class="num">${fmt(ev.data.distance)} m</td>
-      <td>${ev.action_required.vibration === 'strong' ? '強震動' : '輕震動'}</td>
+      <td>${VIB_ZH[ev.action_required.vibration] || '—'}</td>
       <td class="note">${esc(ev.action_required.audio_message)}</td>
+      <td class="muted small">${esc(ev.action_required.speak_reason || '')}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 

@@ -13,3 +13,6 @@ output/public_url.json
 
 # 本機設定
 .claude/
+
+# YOLO-World 產生模型時暫存的 CLIP 文字編碼器（約 350 MB，執行時不需要）
+weights/

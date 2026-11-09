@@ -41,12 +41,35 @@ body.calibrating #overlay { outline: 3px solid var(--orange); outline-offset: -3
   background: var(--orange); color: #000; font-weight: 700; border-radius: 10px; padding: 10px;
 }
 
+/* 偵測清單（Minecraft 字幕風格）：右下角、警示列上方 */
+.subs {
+  position: fixed; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 122px); margin: 0; padding: 0;
+  list-style: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  width: min(72vw, 300px); pointer-events: none;
+}
+.subs li {
+  display: grid; grid-template-columns: 1.4em 1fr auto 1.4em; align-items: center; gap: 6px;
+  background: rgba(0, 0, 0, 0.62); color: #fff; padding: 4px 8px; border-radius: 4px;
+  font-size: 17px; font-weight: 700; line-height: 1.25; transition: opacity 0.3s linear;
+  border-left: 4px solid transparent; text-shadow: 0 1px 2px #000;
+}
+.subs li .arrow { color: #fff; text-align: center; font-size: 15px; }
+.subs li .dist { font-variant-numeric: tabular-nums; color: #ddd; font-weight: 600; }
+.subs li.stop { border-left-color: var(--critical); background: rgba(140, 16, 20, 0.8); }
+.subs li.near { border-left-color: var(--warning); }
+.subs li.near .label { color: #ffd66b; }
+.subs li.ahead { border-left-color: #3987e5; }
+.subs li.none { color: #bdbdb5; }
+.subs li.none .dist { color: #9a9a92; }
+
 /* 底部警示 */
 .alert {
   position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 14px; align-items: center;
   padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
-  background: var(--panel); border-top: 6px solid var(--good); min-height: 110px;
+  background: var(--panel); border-top: 6px solid var(--good); min-height: 104px;
 }
+.alert.notice { border-top-color: #3987e5; background: rgba(10, 30, 60, 0.9); }
+.alert.notice .alert-level { color: #7fb3ff; }
 .alert.warning { border-top-color: var(--warning); background: rgba(60, 42, 4, 0.92); }
 .alert.critical { border-top-color: var(--critical); background: rgba(120, 16, 20, 0.94); animation: flash 0.8s ease-in-out infinite; }
 @keyframes flash { 50% { background: rgba(170, 22, 28, 0.96); } }
@@ -73,6 +96,7 @@ body.calibrating #overlay { outline: 3px solid var(--orange); outline-offset: -3
 .link-btn { background: none; border: 0; color: var(--orange); font: inherit; font-size: 16px; text-decoration: underline; padding: 8px; }
 .hint { font-size: 14px; color: var(--text-2); }
 .hint.err { color: #ff9a9a; }
+.hint.version { font-size: 12px; opacity: 0.7; }
 
 /* 設定 */
 dialog {

@@ -7,7 +7,8 @@ const grab = document.createElement('canvas');
 
 const ORANGE = '#ff8c1a';
 const RED = '#e5484d';
-const LEVEL_ZH = { critical: '危險', warning: '注意', none: '安全' };
+const LEVEL_ZH = { critical: '停下', warning: '注意', notice: '提醒', none: '安全' };
+const APP_VERSION = '2026.11.09-3';  // 改程式時更新，手機畫面上看得到
 const SEND_LONG_SIDE = 640;   // 送到後端的影格長邊（像素）
 // 同時在路上的影格數：經過網路通道時延遲約 0.5 秒，送 2 張讓「傳輸」和「運算」重疊，幀率約加倍
 const MAX_INFLIGHT = 2;
@@ -30,13 +31,13 @@ const store = {
   }
 })();
 
-const prefs = store.get('oa-m-prefs', { beep: true, speech: true, vibrate: true, gyro: true, hq: false });
+const prefs = { speech: true, speakAhead: false, vibrate: true, toneFallback: true, gyro: true, hq: false, ...store.get('oa-m-prefs', {}) };
 const geometry = store.get('oa-m-geometry', { height_m: 1.3, pitch_deg: 15, hfov_deg: null });
 let hfovManual = geometry.hfov_deg != null;
 
 const state = {
   ws: null, running: false, stream: null, lastResult: null, frames: [],
-  lastKey: null, lastSpoken: 0, reconnectTimer: null, wakeLock: null, inflight: 0,
+  reconnectTimer: null, wakeLock: null, inflight: 0,
 };
 
 // ---------- 狀態顯示 ----------
@@ -52,12 +53,9 @@ function renderAlert(ev, hazards) {
   $('alert-level').textContent = LEVEL_ZH[lv];
   $('alert-msg').textContent = ev?.action_required?.audio_message || '前方安全';
   const subs = [];
+  if (ev?.data?.label && ev.priority === 'critical') subs.push(ev.data.label);
   if (ev?.data?.distance != null) subs.push(`距離 ${ev.data.distance.toFixed(1)} 公尺`);
-  if (ev?.data?.others?.length) subs.push(`另有 ${ev.data.others.length} 項危險`);
-  if (lv === 'none' && hazards) {
-    const near = Object.values(hazards).filter((h) => h.raw_level && h.raw_level !== 'none');
-    if (near.length) subs.push('偵測中，等待確認…');
-  }
+  if (ev?.data?.others?.length) subs.push(`另有 ${ev.data.others.length} 項`);
   $('alert-sub').textContent = subs.join('・');
 }
 
@@ -103,13 +101,15 @@ function draw(r) {
 
   // 物體：橘色框 + 名稱與距離（近的畫在最上層）
   placed.length = 0;
-  const objs = [...(r.objects || [])].sort((a, b) => (b.distance ?? 99) - (a.distance ?? 99));
+  const topKey = r.candidates?.[0]?.key;
+  const objs = (r.objects || []).filter((o) => o.category)  // 杯子、筆電等不在分類表的不畫
+    .sort((a, b) => (b.distance ?? 99) - (a.distance ?? 99));
   for (const o of objs) {
     const [x1, y1, x2, y2] = o.box;
     const left = X(x1);
     const top = Y(y1);
     ctx.strokeStyle = ORANGE;
-    ctx.lineWidth = o.in_path ? 5 : 3;
+    ctx.lineWidth = `obj${o.track_id}` === topKey ? 7 : o.in_path ? 4 : 2.5;
     ctx.strokeRect(left, top, X(x2) - left, Y(y2) - top);
     const text = o.distance != null ? `${o.label_zh} ${o.distance.toFixed(1)} m` : o.label_zh;
     tag(ctx, text, Math.max(4, left), Math.max(30, top), ORANGE);
@@ -132,7 +132,48 @@ function tag(ctx, text, x, y, color) {
 
 window.addEventListener('resize', () => draw(state.lastResult));
 
-// ---------- 逼逼聲（Web Audio，危險等級 critical 時持續） ----------
+// ---------- 偵測清單（Minecraft 字幕風格） ----------
+//
+// 每個東西一行：方向箭頭在左（左前方）或右（右前方），正前方用 ▲、頭部高度用 ⤒。
+// 顏色：紅＝請停下、黃＝接近（2.5 m 內）、藍框＝提早告知（2.5~5.5 m）、灰＝看到但不在路上。
+// 看不到後保留 2.5 秒並慢慢淡出，不會一閃一閃。
+const SUB_KEEP_MS = 2500;
+const SUB_MAX = 6;
+const ZONE_ORDER = { stop: 3, near: 2, ahead: 1, none: 0 };
+const subs = new Map();
+
+function updateSubs(listing) {
+  const now = performance.now();
+  for (const it of listing || []) subs.set(it.key, { ...it, seen: now });
+  renderSubs();
+}
+
+function renderSubs() {
+  const now = performance.now();
+  for (const [k, it] of subs) if (now - it.seen > SUB_KEEP_MS) subs.delete(k);
+  const items = [...subs.values()]
+    .sort((a, b) => (ZONE_ORDER[b.zone] - ZONE_ORDER[a.zone]) || (a.distance - b.distance))
+    .slice(0, SUB_MAX);
+  $('subs').innerHTML = items.map((it) => {
+    const age = now - it.seen;
+    const opacity = age < 800 ? 1 : Math.max(0, 1 - (age - 800) / (SUB_KEEP_MS - 800));
+    const left = it.direction === 'left' ? '◀' : it.direction === 'up' ? '⤒' : it.direction === 'front' ? '▲' : '';
+    const right = it.direction === 'right' ? '▶' : '';
+    return `<li class="${it.zone}" style="opacity:${opacity.toFixed(2)}">
+      <span class="arrow">${left}</span><span class="label">${it.label}</span>
+      <span class="dist">${it.distance.toFixed(1)} m</span><span class="arrow">${right}</span></li>`;
+  }).join('');
+}
+setInterval(renderSubs, 200);  // 淡出動畫
+
+// ---------- 震動（越緊急越快）；手機不支援震動時改用提示音 ----------
+//
+// urgency 由後端警示規劃決定：3 = 請停下、2 = 快接近（near）、1 = 提早告知（ahead）、0 = 安全
+//   3：每 0.35 秒短震一次（連續、急促）
+//   2：每 1 秒震一次
+//   1：只在播報時輕震一下
+const VIBRATE_RHYTHM = { 3: { every: 350, pulse: 180 }, 2: { every: 1000, pulse: 150 } };
+const canVibrate = typeof navigator.vibrate === 'function';
 
 let audioCtx = null;
 
@@ -141,61 +182,56 @@ function unlockAudio() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-function beep(times = 3, freq = 1000) {
+// 提示音（iPhone 等不支援震動的手機用）
+function tone(ms = 120, freq = 1000) {
   if (!audioCtx) return;
   const t0 = audioCtx.currentTime;
-  for (let i = 0; i < times; i++) {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = freq;
-    const s = t0 + i * 0.2;
-    gain.gain.setValueAtTime(0.0001, s);
-    gain.gain.exponentialRampToValueAtTime(0.35, s + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, s + 0.12);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(s);
-    osc.stop(s + 0.13);
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + ms / 1000 + 0.01);
+}
+
+function pulse(ms) {
+  if (!prefs.vibrate) return;
+  if (canVibrate) navigator.vibrate(ms);
+  else if (prefs.toneFallback) tone(Math.min(ms, 150), ms >= 180 ? 1200 : 900);
+}
+
+let rhythmTimer = null;
+let rhythmUrgency = 0;
+function updateVibration(urgency) {
+  if (urgency === rhythmUrgency) return;
+  rhythmUrgency = urgency;
+  clearInterval(rhythmTimer);
+  rhythmTimer = null;
+  if (canVibrate) navigator.vibrate(0);
+  const r = VIBRATE_RHYTHM[urgency];
+  if (r) {
+    pulse(r.pulse);
+    rhythmTimer = setInterval(() => pulse(r.pulse), r.every);
   }
 }
 
-// 越近嗶得越急：1 m 內每 0.5 秒，否則每 1 秒
-let beepTimer = null;
-let beepDistance = null;
-function updateBeeping(ev) {
-  const critical = ev?.priority === 'critical';
-  beepDistance = ev?.data?.distance ?? null;
-  if (critical && prefs.beep && !beepTimer) {
-    const loop = () => {
-      beep(3, 1000);
-      beepTimer = setTimeout(loop, beepDistance != null && beepDistance < 1.0 ? 500 : 1000);
-    };
-    loop();
-  } else if ((!critical || !prefs.beep) && beepTimer) {
-    clearTimeout(beepTimer);
-    beepTimer = null;
-  }
-}
-
-// ---------- 語音與震動 ----------
+// ---------- 語音：後端已節流，只在 speak = true 時開口 ----------
 
 function announce(ev) {
-  const key = ev.priority === 'none' ? null : `${ev.priority}|${ev.data.obstacle_type}`;
-  const now = Date.now();
-  if (key && (key !== state.lastKey || (ev.priority === 'critical' && now - state.lastSpoken > 5000))) {
-    if (prefs.speech && window.speechSynthesis) {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(ev.action_required.audio_message);
-      u.lang = 'zh-TW';
-      u.rate = 1.15;
-      speechSynthesis.speak(u);
-    }
-    if (prefs.vibrate && navigator.vibrate) {
-      navigator.vibrate(ev.priority === 'critical' ? [300, 100, 300, 100, 300] : [120]);
-    }
-    state.lastSpoken = now;
+  const act = ev?.action_required;
+  if (!act?.speak || !act.audio_message) return;
+  if (prefs.speech && window.speechSynthesis) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(act.audio_message);
+    u.lang = 'zh-TW';
+    u.rate = 1.15;
+    speechSynthesis.speak(u);
   }
-  state.lastKey = key;
+  if ((act.urgency ?? 0) <= 1) pulse(80);  // 提早告知：播報時輕震一下
 }
 
 // ---------- 後端連線 ----------
@@ -209,7 +245,7 @@ function sendConfig(extra = {}) {
   if (state.ws?.readyState !== WebSocket.OPEN) return;
   state.ws.send(JSON.stringify({
     type: 'config', ...geometry, hfov_deg: geometry.hfov_deg ?? autoHfov(),
-    depth_quality: prefs.hq ? 'high' : 'standard', ...extra,
+    depth_quality: prefs.hq ? 'high' : 'standard', speak_ahead: !!prefs.speakAhead, ...extra,
   }));
 }
 
@@ -251,7 +287,14 @@ function connect() {
       setStatus('連結已失效：請重新掃描電腦上的 QR code', true);
       return;
     }
-    setStatus(opened ? '連線中斷，重新連線中…' : '連不到電腦：請確認電腦上的 phone.py 正在執行', true);
+    if (!opened) {
+      // 連不上時分辨：電腦沒開 phone.py，或是這個網址已失效（免費通道每次啟動網址都不同）
+      fetch('/api/status', { cache: 'no-store' })
+        .then((r) => setStatus(r.ok ? '連不到辨識服務，重試中…' : '網址已失效：請重新掃描電腦上的 QR code', true))
+        .catch(() => setStatus('網址已失效或電腦未開 phone.py：請重新掃描電腦上的 QR code', true));
+    } else {
+      setStatus('連線中斷，重新連線中…', true);
+    }
     state.reconnectTimer = setTimeout(connect, 2000);
   };
 }
@@ -283,8 +326,9 @@ function onResult(r) {
   const fps = state.frames.length > 1 ? (state.frames.length - 1) / ((now - state.frames[0]) / 1000) : 0;
   setStatus(r.calibration.ok ? `${fps.toFixed(1)} fps` : r.calibration.status, !r.calibration.ok);
   draw(r);
+  updateSubs(r.listing);
   renderAlert(r.event, r.hazards);
-  updateBeeping(r.event);
+  updateVibration(r.event?.action_required?.urgency ?? 0);
   announce(r.event);
 }
 
@@ -333,11 +377,13 @@ function stop() {
   state.ws?.close();
   state.ws = null;
   state.stream?.getTracks().forEach((t) => t.stop());
-  updateBeeping(null);
+  updateVibration(0);
   speechSynthesis?.cancel();
   state.wakeLock?.release().catch(() => {});
   state.lastResult = null;
   draw(null);
+  subs.clear();
+  renderSubs();
   renderAlert(null);
   $('start-screen').hidden = false;
   setStatus('已停止');
@@ -411,7 +457,8 @@ function renderSettings() {
   $('pitch-val').textContent = `${geometry.pitch_deg}°${gyro.on ? '（陀螺儀）' : ''}`;
   $('hfov-val').textContent = `${hfov}°${hfovManual ? '' : '（自動）'}`;
   $('pitch').disabled = gyro.on;
-  for (const k of ['gyro', 'beep', 'speech', 'vibrate', 'hq']) $(k).checked = !!prefs[k];
+  for (const k of ['gyro', 'toneFallback', 'speech', 'speakAhead', 'vibrate', 'hq']) $(k).checked = !!prefs[k];
+  $('vibrate-note').textContent = canVibrate ? '' : '這支手機不支援震動（例如 iPhone），會改用提示音';
 }
 
 $('settings-btn').addEventListener('click', () => { renderSettings(); $('settings').showModal(); });
@@ -425,12 +472,12 @@ for (const [id, key] of [['height', 'height_m'], ['pitch', 'pitch_deg'], ['hfov'
   $(id).addEventListener('change', () => { saveGeometry(); sendConfig(); });
 }
 
-for (const k of ['beep', 'speech', 'vibrate', 'hq']) {
+for (const k of ['toneFallback', 'speech', 'speakAhead', 'vibrate', 'hq']) {
   $(k).addEventListener('change', () => {
     prefs[k] = $(k).checked;
     savePrefs();
-    if (k === 'hq') sendConfig();
-    if (k === 'beep') updateBeeping(state.lastResult?.event);
+    if (k === 'hq' || k === 'speakAhead') sendConfig();
+    if (k === 'vibrate' && !prefs.vibrate) updateVibration(0);
   });
 }
 $('gyro').addEventListener('change', async () => {
@@ -439,7 +486,14 @@ $('gyro').addEventListener('change', async () => {
   if (prefs.gyro) await enableGyro(); else disableGyro();
   renderSettings();
 });
-$('test-beep').addEventListener('click', () => { unlockAudio(); beep(3, 1000); });
+// 測試：依序示範三種節奏（提醒 → 接近 → 請停下），各 2 秒
+$('test-vibrate').addEventListener('click', () => {
+  unlockAudio();
+  pulse(80);
+  setTimeout(() => updateVibration(2), 1000);
+  setTimeout(() => updateVibration(3), 3000);
+  setTimeout(() => updateVibration(state.lastResult?.event?.action_required?.urgency ?? 0), 5000);
+});
 
 // ---------- 距離校正：點畫面上量過距離的位置 ----------
 
@@ -497,8 +551,18 @@ const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standa
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) $('ios-hint').hidden = false;
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service Worker 註冊失敗', e));
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => reg.update())
+    .catch((e) => console.warn('Service Worker 註冊失敗', e));
+  // 從舊版更新時（原本就有 Service Worker 在管這頁），新版接手後重新整理一次，確保用的是最新的 app.js。
+  // 第一次安裝不重新整理；偵測中也不打斷。
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded && !state.running) { reloaded = true; location.reload(); }
+  });
 }
+$('version').textContent = `版本 ${APP_VERSION}${canVibrate ? '' : '・此手機不支援震動，改用提示音'}`;
 
 renderSettings();
 renderAlert(null);

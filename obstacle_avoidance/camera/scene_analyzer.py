@@ -6,8 +6,8 @@
                                     ├─ 前方障礙物（通道內 0.25~1.0 m 高）＋ YOLO 類別
                                     ├─ 懸空障礙物（±30°、1.0~2.0 m 高）→ hanging_obstacle_detector
                                     └─ 地面剖面 → 斷崖／樓梯／階差（ground_analyzer）
-                                                       ↓ 時間平滑（N 幀確認）
-                                                  fusion.fuse_hazards → Navigation Agent 事件
+                                                       ↓
+                         alert_planner：分類、排序、距離區間、節流 → Navigation Agent 事件（一次只講一件事）
 """
 
 import base64
@@ -21,12 +21,13 @@ import cv2
 import numpy as np
 
 from camera import config as cfg
+from camera.alert_planner import AlertPlanner, Candidate, direction_of
 from camera.depth_source import GroundCalibrator, MonocularDepthEstimator
 from camera.geometry import CameraGeometry
 from camera.ground_analyzer import HAZARD_ZH, analyze_ground
 from camera.object_detector import ObjectDetector
 from detectors import hanging_obstacle_detector
-from fusion import LEVEL_RANK, fuse_hazards
+from fusion import LEVEL_RANK
 
 
 class Models:
@@ -106,6 +107,8 @@ class SceneAnalyzer:
         self._smoothed = {}       # 各危險的平滑後距離
         self._prev_objects = []   # 上一幀物體（追蹤用）
         self._last = None         # 上一幀的世界座標（已知距離校正用）
+        self._next_track_id = 1
+        self.planner = AlertPlanner()
 
     def set_geometry(self, height_m=None, pitch_deg=None, hfov_deg=None, reset=True):
         """reset=False：連續微調（例如手機陀螺儀即時更新傾角），保留校正與平滑狀態。"""
@@ -118,6 +121,7 @@ class SceneAnalyzer:
         if reset:
             self.calibrator.reset()
             self.debouncer.reset()
+            self.planner.reset()
             self._smoothed.clear()
             self._prev_objects = []
 
@@ -185,19 +189,47 @@ class SceneAnalyzer:
         return value
 
     def _track_objects(self, objects):
-        """與上一幀同類別、框重疊的物體視為同一個，距離做平滑。"""
+        """
+        物體追蹤：同類別、位置相近的視為同一個（編號不變、距離做平滑）。
+        追蹤會保留 TRACK_MAX_AGE_S 秒，偵測框閃掉一兩幀再出現，仍是同一個編號，不會被當成新目標重唸。
+        """
+        now = time.monotonic()
+        self._prev_objects = [t for t in self._prev_objects if now - t["t"] <= cfg.TRACK_MAX_AGE_S]
         a = cfg.DISTANCE_SMOOTHING
-        for o in objects:
-            if o.get("distance") is None:
+
+        def score(t, o):
+            if t["label"] != o["label"]:
+                return 0.0
+            iou = _iou(t["box"], o["box"])
+            # 框重疊不多時（手晃、物體移動），看中心點距離
+            cx = lambda b: ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+            (tx, ty), (ox, oy) = cx(t["box"]), cx(o["box"])
+            near = max(0.0, 1 - math.hypot(tx - ox, ty - oy) / 0.15)
+            return max(iou, near * 0.5)
+
+        pairs = sorted(((score(t, o), ti, oi) for ti, t in enumerate(self._prev_objects)
+                        for oi, o in enumerate(objects)), reverse=True)
+        used_t, used_o = set(), set()
+        for s, ti, oi in pairs:
+            if s < cfg.TRACK_IOU * 0.6 or ti in used_t or oi in used_o:
                 continue
-            cands = [p for p in self._prev_objects if p["label"] == o["label"] and p.get("distance") is not None]
-            best = max(cands, key=lambda p: _iou(p["box"], o["box"]), default=None)
-            if best is not None and _iou(best["box"], o["box"]) >= cfg.TRACK_IOU \
-                    and abs(best["distance"] - o["distance"]) < cfg.DISTANCE_JUMP_RESET_M:
-                o["distance"] = round(a * o["distance"] + (1 - a) * best["distance"], 2)
-                o["lateral"] = round(a * o["lateral"] + (1 - a) * best["lateral"], 2)
+            t, o = self._prev_objects[ti], objects[oi]
+            used_t.add(ti)
+            used_o.add(oi)
+            o["track_id"] = t["track_id"]
+            if o.get("distance") is not None and t.get("distance") is not None \
+                    and abs(t["distance"] - o["distance"]) < cfg.DISTANCE_JUMP_RESET_M:
+                o["distance"] = round(a * o["distance"] + (1 - a) * t["distance"], 2)
+                o["lateral"] = round(a * o["lateral"] + (1 - a) * t["lateral"], 2)
                 o["direction"] = _direction(o["lateral"], o["distance"])
-        self._prev_objects = objects
+
+        for oi, o in enumerate(objects):
+            if oi not in used_o:
+                o["track_id"] = self._next_track_id  # 新目標：給一個編號，播報節流靠它辨識「同一個」
+                self._next_track_id += 1
+        # 更新追蹤：這幀有看到的換成新位置；沒看到的保留到過期
+        kept = [t for ti, t in enumerate(self._prev_objects) if ti not in used_t]
+        self._prev_objects = kept + [{**o, "t": now} for o in objects]
 
     # ---------- 主流程 ----------
 
@@ -285,10 +317,13 @@ class SceneAnalyzer:
                 obj["distance"] = round(float(np.percentile(f, 20)), 2)
                 obj["lateral"] = round(float(np.median(lat)), 2)
                 lo, hi = np.percentile(lat, [10, 90])
+                obj["lat_range"] = [round(float(lo), 2), round(float(hi), 2)]
+                obj["min_height"] = round(float(np.percentile(height[sl][m], 10)), 2)
                 obj["in_path"] = bool(lo <= cfg.CORRIDOR_HALF_WIDTH_M and hi >= -cfg.CORRIDOR_HALF_WIDTH_M)
                 obj["direction"] = _direction(obj["lateral"], obj["distance"])
             else:
-                obj.update({"distance": None, "lateral": None, "in_path": False, "direction": None})
+                obj.update({"distance": None, "lateral": None, "in_path": False, "direction": None,
+                            "lat_range": None, "min_height": None})
         self._track_objects(objects)
 
         front_dist, front_lat, label = None, None, None
@@ -299,6 +334,7 @@ class SceneAnalyzer:
             front_dist = self._smooth("front_depth", front_dist)
         else:
             self._smooth("front_depth", None)
+        depth_front = None if front_dist is None else (front_dist, front_lat or 0.0)
         in_path = [o for o in objects if o.get("in_path") and o.get("distance") is not None]
         if in_path:
             nearest_obj = min(in_path, key=lambda o: o["distance"])
@@ -333,7 +369,12 @@ class SceneAnalyzer:
 
         raw = {"front": front, "hanging": hanging, "ground": ground}
         confirmed = {k: self.debouncer.update(k, v) for k, v in raw.items()}
-        event = fuse_hazards(list(confirmed.values()))
+
+        # 警示規劃：分類、排序、節流後只輸出一則
+        candidates = self._candidates(objects, depth_front, hang_dist, ground, forward, lateral, height, valid)
+        event, ranked = self.planner.plan(candidates)
+        result["candidates"] = [c.as_dict() for c in ranked]
+        result["listing"] = self._listing(objects, candidates, ranked)
 
         result.update({
             "hazards": {k: self._public_hazard(v) for k, v in confirmed.items()},
@@ -349,6 +390,122 @@ class SceneAnalyzer:
             "radar": self._radar_points(forward, lateral, height, valid),
         })
 
+    # ---------- 警示候選 ----------
+
+    def _candidates(self, objects, depth_front, hang_dist, ground, forward, lateral, height, valid):
+        """把這一幀所有偵測結果整理成警示候選（見 camera/alert_planner.py）。"""
+        out = []
+        explained = []  # 已被 YOLO 物體解釋的距離，深度障礙物就不重複報
+
+        for o in objects:
+            if o.get("category") is None or o.get("distance") is None or o["distance"] > cfg.AHEAD_DISTANCE_M:
+                continue
+            lo, hi = o["lat_range"]
+            if lo > cfg.AVOID_HALF_WIDTH_M or hi < -cfg.AVOID_HALF_WIDTH_M:
+                continue  # 離行進路線太遠，不會撞到
+            in_path = lo <= cfg.CORRIDOR_HALF_WIDTH_M and hi >= -cfg.CORRIDOR_HALF_WIDTH_M
+            overhead = o["category"] == "overhead" or (o["min_height"] or 0) >= cfg.HANGING_MIN_HEIGHT_M
+            category = "overhead" if overhead and o["category"] not in ("vehicle", "person", "stairs") else o["category"]
+            direction = direction_of(o["lateral"], o["distance"])
+            if not in_path and direction == "front":
+                direction = "left" if o["lateral"] < 0 else "right"
+            type_ = {"stairs": "escalator" if o["label"] == "escalator" else "stairs",
+                     "overhead": "hanging_obstacle"}.get(category, "front_obstacle")
+            out.append(Candidate(f"obj{o['track_id']}", category, type_, o["label_zh"], o["distance"],
+                                 direction, blocks_path=in_path, overhead=category == "overhead",
+                                 free_side=self._free_side(o["distance"], forward, lateral, height, valid)))
+            if in_path:
+                explained.append(o["distance"])
+
+        # 深度偵測到、但 YOLO 認不出來的通道內障礙物：牆壁或未知障礙物
+        gtype, gdist = ground.get("type"), ground.get("distance")
+        if depth_front is not None:
+            d, lat = depth_front
+            # 向上樓梯的踢面會被當成障礙物；位在樓梯起點之後的視為樓梯本身
+            riser = gtype in ("stairs_up", "step_up") and gdist is not None and d >= gdist - 0.3
+            if not riser and not any(abs(d - e) < 0.6 for e in explained):
+                wall = self._is_wall(d, forward, lateral, height, valid)
+                out.append(Candidate("wall" if wall else "obstacle", "wall" if wall else "obstacle",
+                                     "front_obstacle", "牆壁" if wall else "障礙物", d,
+                                     "front", free_side=None if wall else self._free_side(d, forward, lateral, height, valid)))
+
+        # 頭部高度的懸空物：下方要是空的（招牌、樹枝），下方也被擋住的是一般障礙物（人、車的上半身）
+        below_clear = depth_front is None or depth_front[0] > hang_dist + 0.5 if hang_dist is not None else False
+        explained_any = hang_dist is not None and any(abs(c.distance - hang_dist) < 0.6 for c in out)
+        if hang_dist is not None and below_clear and not explained_any:
+            out.append(Candidate("overhead", "overhead", "hanging_obstacle", "障礙物", hang_dist, "front", overhead=True))
+
+        # 地面：斷崖／樓梯／台階
+        if gtype and gdist is not None:
+            if gtype == "cliff":  # 單一大落差才叫停；樓梯的總高度差再大也是「樓梯，請小心」
+                out.append(Candidate("ground", "drop", "cliff", "大落差", gdist, height_change=ground.get("height_change_m")))
+            elif gtype in ("stairs_down", "stairs_up"):
+                # YOLO-World 若在附近認出手扶梯／樓梯，用它的名稱
+                named = next((c for c in out if c.category == "stairs" and abs(c.distance - gdist) < 1.5), None)
+                if named:
+                    named.type = gtype if named.type != "escalator" else "escalator"
+                    named.distance = min(named.distance, gdist)
+                else:
+                    label = "向下樓梯" if gtype == "stairs_down" else "向上樓梯"
+                    out.append(Candidate("ground", "stairs", gtype, label, gdist, height_change=ground.get("height_change_m")))
+            else:
+                out.append(Candidate("ground", "step", gtype, "台階", gdist, height_change=ground.get("height_change_m")))
+        return out
+
+    def _listing(self, objects, candidates, ranked):
+        """
+        畫面下方的清單（像 Minecraft 的字幕）：列出看到的東西、方向與距離，不論會不會唸出來。
+        區間（zone）沿用警示規劃的結果；不在警示範圍內的標為 none（灰色顯示）。
+        """
+        zone_of = {c.key: c.zone for c in candidates}
+        items = []
+        for o in objects:
+            if o.get("category") is None or o.get("distance") is None or o["distance"] > cfg.LIST_MAX_DISTANCE_M:
+                continue
+            key = f"obj{o['track_id']}"
+            direction = direction_of(o["lateral"], o["distance"])
+            overhead = o.get("min_height") is not None and o["min_height"] >= cfg.HANGING_MIN_HEIGHT_M
+            items.append({"key": key, "label": o["label_zh"], "distance": o["distance"],
+                          "direction": "up" if overhead and o["category"] not in ("vehicle", "person") else direction,
+                          "zone": zone_of.get(key, "none"), "category": o["category"]})
+        listed = {i["key"] for i in items}
+        for c in candidates:  # 牆壁、落差、樓梯等不是 YOLO 物體的
+            if c.key not in listed:
+                items.append({"key": c.key, "label": c.label, "distance": round(c.distance, 2),
+                              "direction": "up" if c.overhead else c.direction, "zone": c.zone,
+                              "category": c.category})
+        rank = {"stop": 3, "near": 2, "ahead": 1, "none": 0}
+        items.sort(key=lambda i: (-rank[i["zone"]], i["distance"]))
+        return items[:8]
+
+    @staticmethod
+    def _is_wall(d, forward, lateral, height, valid):
+        """同一距離附近的障礙點橫跨很寬又很高 → 牆壁（或大面積的櫃子、車廂）。"""
+        with np.errstate(invalid="ignore"):
+            m = valid & (forward >= d - 0.1) & (forward <= d + 0.6) & (np.abs(lateral) < 3) & \
+                (height >= cfg.FRONT_MIN_HEIGHT_M) & (height <= cfg.HANGING_MAX_HEIGHT_M)
+        if m.sum() < cfg.MIN_OBSTACLE_PIXELS * 4:
+            return False
+        lat_lo, lat_hi = np.percentile(lateral[m], [5, 95])
+        h_lo, h_hi = np.percentile(height[m], [5, 95])
+        return (lat_hi - lat_lo) >= cfg.WALL_MIN_WIDTH_M and (h_hi - h_lo) >= cfg.WALL_MIN_HEIGHT_M
+
+    @staticmethod
+    def _free_side(d, forward, lateral, height, valid):
+        """障礙物左右兩側，哪邊比較空（給「請從左／右側繞過」用）。差不多時回傳 None。"""
+        with np.errstate(invalid="ignore"):
+            band = valid & (forward > 0.2) & (forward <= d + 1.5) & \
+                (height >= cfg.FRONT_MIN_HEIGHT_M) & (height <= cfg.HANGING_MAX_HEIGHT_M)
+            left = int((band & (lateral < -cfg.CORRIDOR_HALF_WIDTH_M) & (lateral > -1.5)).sum())
+            right = int((band & (lateral > cfg.CORRIDOR_HALF_WIDTH_M) & (lateral < 1.5)).sum())
+        if max(left, right) < cfg.MIN_OBSTACLE_PIXELS:
+            return None  # 兩側都空：不特別建議
+        if left < right * 0.5:
+            return "left"
+        if right < left * 0.5:
+            return "right"
+        return None
+
     @staticmethod
     def _public_hazard(h):
         h = dict(h)
@@ -361,7 +518,9 @@ class SceneAnalyzer:
             "hazards": {"front": {**none, "type": "front_obstacle", "type_zh": "前方障礙物"},
                         "hanging": {**none, "type": "hanging_obstacle", "type_zh": "懸空障礙物"},
                         "ground": {**none, "type": None, "type_zh": None}},
-            "event": fuse_hazards([]),
+            "event": self.planner.plan([])[0],
+            "candidates": [],
+            "listing": [],
             "ground": {"profile": [], "plateaus": [], "edge": None, "raw_type": None, "raw_type_zh": None},
             "corridor": self._corridor(w, h),
             "radar": [],

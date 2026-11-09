@@ -220,6 +220,9 @@ nav a.active { color: var(--text); border-bottom-color: var(--s1); }
   display: flex; gap: 16px; align-items: center; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;
   background: var(--surface); border: 1px solid var(--border); border-left: 8px solid var(--good);
 }
+.banner.notice { border-left-color: var(--s1); background: rgba(57, 135, 229, 0.08); }
+.banner.notice .banner-level { color: #7fb3ff; }
+.badge.notice { background: rgba(57, 135, 229, 0.18); color: #7fb3ff; }
 .banner.warning { border-left-color: var(--warning); background: rgba(250, 178, 25, 0.08); }
 .banner.critical { border-left-color: var(--critical); background: rgba(208, 59, 59, 0.14); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { background: rgba(208, 59, 59, 0.26); } }
