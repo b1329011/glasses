@@ -1,0 +1,5 @@
+flask
+pyopenssl
+requests
+google-generativeai
+python-dotenv

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Agent C 室外導航</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: #0f1115;
+    color: #f0f0f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 16px 40px;
+  }
+  h1 { font-size: 18px; color: #9fb8ff; margin: 4px 0; }
+  .status-bar {
+    width: 100%;
+    max-width: 480px;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .status-bar .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  .dot.ok { background: #4ade80; }
+  .dot.bad { background: #f87171; }
+
+  /* ===== 地圖 ===== */
+  #map {
+    width: 100%;
+    max-width: 480px;
+    height: 220px;
+    border-radius: 12px;
+    margin: 8px 0 4px;
+    border: 1px solid #2a2f3a;
+  }
+  .map-legend {
+    width: 100%;
+    max-width: 480px;
+    font-size: 11px;
+    color: #777;
+    display: flex;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .map-legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* ===== 提示字區塊 ===== */
+  .hint-panel {
+    width: 100%;
+    max-width: 480px;
+    background: #171b24;
+    border: 1px solid #262c38;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: #9aa4b8;
+    margin-bottom: 10px;
+    line-height: 1.7;
+  }
+  .hint-panel b { color: #cfd6e4; }
+  .hint-panel .tag {
+    display: inline-block;
+    background: #23304a;
+    color: #a9c4ff;
+    padding: 1px 7px;
+    border-radius: 6px;
+    margin: 1px 2px;
+    font-size: 11.5px;
+  }
+
+  .talk-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(145deg, #4f6bff, #3a4fd8);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(79,107,255,0.4);
+    margin: 14px 0;
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+  }
+  .talk-btn:active,
+  .talk-btn.listening {
+    transform: scale(0.95);
+    box-shadow: 0 4px 12px rgba(79,107,255,0.6);
+    background: linear-gradient(145deg, #ff5f5f, #d83a3a);
+  }
+  .talk-btn.listening { animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
+    70% { box-shadow: 0 0 0 20px rgba(248,113,113,0); }
+    100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); }
+  }
+
+  .nav-status {
+    width: 100%;
+    max-width: 480px;
+    background: #16241c;
+    border: 1px solid #234a34;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12.5px;
+    color: #8fe0b0;
+    margin-bottom: 10px;
+    display: none;
+  }
+  .nav-status.active { display: block; }
+
+  .log {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 88%;
+  }
+  .bubble.user {
+    align-self: flex-end;
+    background: #2a2f3a;
+    color: #cfd6e4;
+  }
+  .bubble.system {
+    align-self: flex-start;
+    background: #1c2c4a;
+    color: #d6e2ff;
+  }
+
+  .reset-btn {
+    margin-top: 20px;
+    background: none;
+    border: 1px solid #444;
+    color: #999;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🧭 Agent C 室外導航</h1>
+<div class="status-bar">
+  <span id="gps-status"><span class="dot bad"></span>定位中...</span>
+  ／
+  <span id="speech-status"><span class="dot bad"></span>語音辨識檢查中...</span>
+</div>
+
+<div id="map"></div>
+<div class="map-legend">
+  <span><span class="legend-dot" style="background:#4f6bff;"></span>目前位置</span>
+  <span><span class="legend-dot" style="background:#f87171;"></span>目的地</span>
+  <span><span class="legend-dot" style="background:#4ade80;"></span>路線</span>
+</div>
+
+<div class="hint-panel">
+  <b>常用語音指令：</b><br>
+  <span class="tag">導航去[地點]</span>開始導航
+  <span class="tag">換一個</span>換路線方案
+  <span class="tag">好 / 開始</span>確認出發
+  <span class="tag">取消</span>隨時中斷導航
+  <span class="tag">上車了</span><span class="tag">下車了</span>搭乘大眾運輸時確認
+</div>
+
+<div class="nav-status" id="navStatus">🚶 導航進行中，系統會依你走到的位置自動報路，不需要開口確認每一步，只有想取消時才需要說話</div>
+
+<button class="talk-btn" id="talkBtn">按住<br>說話</button>
+
+<div class="log" id="log" aria-live="polite" aria-atomic="false"></div>
+
+<button class="reset-btn" id="resetBtn">重新開始對話</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const talkBtn = document.getElementById('talkBtn');
+const logEl = document.getElementById('log');
+const gpsStatusEl = document.getElementById('gps-status');
+const speechStatusEl = document.getElementById('speech-status');
+const resetBtn = document.getElementById('resetBtn');
+const navStatusEl = document.getElementById('navStatus');
+
+let currentLat = null;
+let currentLng = null;
+let currentStage = 'idle';
+
+// ===== 地圖初始化（Leaflet + OpenStreetMap，完全免費、不需要API金鑰）=====
+const map = L.map('map').setView([25.0375, 121.5637], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap',
+  maxZoom: 19,
+}).addTo(map);
+
+const destIcon = L.divIcon({ className: '', html: '<div style="width:16px;height:16px;background:#f87171;border:3px solid white;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>', iconSize: [16,16] });
+
+let userMarker = null;
+let destMarker = null;
+let routeLine = null;
+let mapHasFitBounds = false;
+let lastKnownHeading = null; // 最後一次已知的朝向角度（0=正北，順時針），沒有方向資訊時維持null
+
+// 做一個「藍點+方向錐形」的標記，像Google Maps那種帶朝向的定位點。
+// heading為null時（剛開啟定位、還沒偵測到移動方向）只顯示圓點，不顯示錐形，
+// 避免在不知道方向時亂指一個方向誤導使用者。
+function buildUserIcon(headingDeg) {
+  const hasHeading = headingDeg !== null && headingDeg !== undefined && !isNaN(headingDeg);
+  const cone = hasHeading
+    ? `<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid #4f6bff;opacity:0.9;"></div>`
+    : '';
+  const rotation = hasHeading ? `transform:rotate(${headingDeg}deg);transform-origin:12px 12px;` : '';
+  const html = `
+    <div style="width:24px;height:24px;position:relative;${rotation}">
+      ${cone}
+      <div style="position:absolute;top:8px;left:8px;width:16px;height:16px;background:#4f6bff;border:3px solid white;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>
+    </div>`;
+  return L.divIcon({ className: '', html, iconSize: [24, 24], iconAnchor: [12, 12] });
+}
+
+function updateUserMarker(lat, lng, headingDeg) {
+  if (headingDeg !== null && headingDeg !== undefined && !isNaN(headingDeg)) {
+    lastKnownHeading = headingDeg;
+  }
+  const icon = buildUserIcon(lastKnownHeading);
+  if (!userMarker) {
+    userMarker = L.marker([lat, lng], { icon }).addTo(map);
+  } else {
+    userMarker.setLatLng([lat, lng]);
+    userMarker.setIcon(icon);
+  }
+}
+
+function updateDestMarker(lat, lng) {
+  if (lat == null || lng == null) return;
+  if (!destMarker) {
+    destMarker = L.marker([lat, lng], { icon: destIcon }).addTo(map);
+  } else {
+    destMarker.setLatLng([lat, lng]);
+  }
+  fitMapToMarkers();
+}
+
+function drawRouteLine(steps) {
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  if (!steps || steps.length === 0) return;
+  const points = [[currentLat, currentLng]];
+  steps.forEach(s => { if (s.end_lat != null && s.end_lng != null) points.push([s.end_lat, s.end_lng]); });
+  routeLine = L.polyline(points, { color: '#4ade80', weight: 4, opacity: 0.8 }).addTo(map);
+  fitMapToMarkers();
+}
+
+function fitMapToMarkers() {
+  const points = [];
+  if (userMarker) points.push(userMarker.getLatLng());
+  if (destMarker) points.push(destMarker.getLatLng());
+  if (routeLine) routeLine.getLatLngs().forEach(p => points.push(p));
+  if (points.length >= 2) {
+    map.fitBounds(L.latLngBounds(points), { padding: [30, 30] });
+  } else if (points.length === 1) {
+    map.setView(points[0], 16);
+  }
+}
+
+// ===== GPS：持續追蹤位置 =====
+let currentWalkSteps = [];   // 目前這段路的完整步驟清單（含座標），由後端在進入導航階段時給
+let currentStepIndex = 0;     // 走到第幾個路段了（前端自己算，靠GPS距離判斷）
+const ARRIVAL_THRESHOLD_M = 20; // 距離小於這個公尺數，視為「走到這個路段的終點了」
+let hasAnnouncedGpsOk = false;
+let hasAnnouncedGpsFail = false;
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+const AUTO_ADVANCE_STAGES = ['navigating_walk', 'navigating_transit_before', 'navigating_transit_after'];
+
+function checkAutoAdvance() {
+  if (!AUTO_ADVANCE_STAGES.includes(currentStage)) return;
+  if (!currentWalkSteps.length || currentStepIndex >= currentWalkSteps.length) return;
+  if (currentLat == null || currentLng == null) return;
+
+  const target = currentWalkSteps[currentStepIndex];
+  if (target.end_lat == null || target.end_lng == null) return;
+
+  const dist = haversineMeters(currentLat, currentLng, target.end_lat, target.end_lng);
+
+  if (dist <= ARRIVAL_THRESHOLD_M) {
+    currentStepIndex++;
+    if (currentStepIndex < currentWalkSteps.length) {
+      // 還有下一段：直接在前端唸出來，不用等後端（更即時），並讓後端知道進度
+      const nextText = currentWalkSteps[currentStepIndex].voice_text;
+      addBubble(nextText, 'system');
+      speak(nextText);
+    } else {
+      // 這段路的所有步驟都走完了，通知後端進入下一階段（等車確認/導航結束等）
+      notifySegmentComplete();
+    }
+  }
+}
+
+async function notifySegmentComplete() {
+  try {
+    const resp = await fetch('/api/segment_complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await resp.json();
+    handleServerResponse(data);
+  } catch (e) {
+    addBubble('（連線失敗，無法通知路段完成）', 'system');
+    speak('連線失敗，暫時無法更新導航進度，建議停下腳步確認網路連線');
+  }
+}
+
+if ('geolocation' in navigator) {
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      currentLat = pos.coords.latitude;
+      currentLng = pos.coords.longitude;
+      gpsStatusEl.innerHTML = `<span class="dot ok"></span>定位成功`;
+      if (!hasAnnouncedGpsOk) {
+        hasAnnouncedGpsOk = true;
+        speak('定位成功，可以開始使用');
+      }
+      // pos.coords.heading：GPS推算的朝向（度，正北為0，順時針），
+      // 只有在「使用者正在移動」時才會有值，靜止不動時是null，
+      // 這也符合實際需求——站著不動時系統本來就不該假裝知道你面向哪
+      updateUserMarker(currentLat, currentLng, pos.coords.heading);
+      if (!mapHasFitBounds && !destMarker) {
+        map.setView([currentLat, currentLng], 16);
+        mapHasFitBounds = true;
+      }
+      checkAutoAdvance();
+    },
+    (err) => {
+      gpsStatusEl.innerHTML = `<span class="dot bad"></span>定位失敗：${err.message}`;
+      if (!hasAnnouncedGpsFail) {
+        hasAnnouncedGpsFail = true;
+        speak('定位失敗，請確認已允許定位權限，否則無法開始導航');
+      }
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+} else {
+  gpsStatusEl.innerHTML = `<span class="dot bad"></span>此瀏覽器不支援定位`;
+  speak('這個瀏覽器不支援定位功能，無法使用導航');
+}
+
+// ===== 語音辨識（Web Speech API）=====
+let recognition = null;
+let SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognitionClass) {
+  recognition = new SpeechRecognitionClass();
+  recognition.lang = 'zh-TW';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    addBubble(text, 'user');
+    sendCommand(text);
+  };
+
+  recognition.onerror = (event) => {
+    clearTimeout(listeningTimeout);
+    talkBtn.classList.remove('listening');
+    addBubble(`（語音辨識錯誤：${event.error}）`, 'system');
+    if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+      speak('麥克風權限被拒絕，請到瀏覽器設定允許麥克風權限');
+    } else if (event.error === 'no-speech') {
+      speak('沒有聽到聲音，請再說一次');
+    } else {
+      speak('語音辨識發生錯誤，請再試一次');
+    }
+  };
+
+  recognition.onend = () => {
+    clearTimeout(listeningTimeout);
+    talkBtn.classList.remove('listening');
+  };
+
+  speechStatusEl.innerHTML = `<span class="dot ok"></span>語音辨識就緒`;
+} else {
+  speechStatusEl.innerHTML = `<span class="dot bad"></span>此瀏覽器不支援語音辨識（iOS所有瀏覽器皆不支援）`;
+  speak('這個瀏覽器不支援語音辨識功能，請改用Android手機的Chrome瀏覽器開啟這個頁面');
+}
+
+talkBtn.addEventListener('mousedown', startListening);
+talkBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startListening(); });
+talkBtn.addEventListener('mouseup', stopListening);
+talkBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopListening(); });
+talkBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopListening(); });
+
+let listeningTimeout = null;
+
+function startListening() {
+  if (!recognition) {
+    speak('此瀏覽器不支援語音辨識，建議改用Android手機的Chrome瀏覽器');
+    alert('此瀏覽器不支援語音辨識，建議用Android手機的Chrome開啟這個頁面（iOS上任何瀏覽器都不支援，這是蘋果WebKit引擎的限制）');
+    return;
+  }
+
+  // 關鍵修正（barge-in）：使用者一按下說話鈕，就立刻打斷系統正在講的話，
+  // 不讓新的語音回應排隊等舊的講完。之前的bug是：使用者已經講完新指令、
+  // 後端也已經處理完畢，但因為 speechSynthesis 預設會把新語音排在佇列後面，
+  // 導致舊的那段（例如列出5個候選地點）還在硬播完，才輪到新的回應播放，
+  // 讓人以為系統沒有即時反應。
+  window.speechSynthesis.cancel();
+
+  talkBtn.classList.add('listening');
+  try { recognition.start(); } catch (e) {}
+  clearTimeout(listeningTimeout);
+  listeningTimeout = setTimeout(() => { talkBtn.classList.remove('listening'); }, 10000);
+}
+
+function stopListening() {
+  if (recognition) { try { recognition.stop(); } catch (e) {} }
+}
+
+// ===== 語音合成 =====
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  // 每次要講新的話之前，先清空佇列，確保新語音立刻播放，
+  // 不會排在前一句還沒講完的內容後面才輪到——這是barge-in的核心保護，
+  // 不只是使用者按按鈕時才打斷，任何時候有新內容要講，一律優先
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-TW';
+  utter.rate = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+
+// ===== 送出指令給後端 =====
+async function sendCommand(text) {
+  try {
+    const resp = await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lat: currentLat, lng: currentLng }),
+    });
+    const data = await resp.json();
+    handleServerResponse(data);
+  } catch (e) {
+    addBubble('（連線失敗，請確認手機跟電腦連同一個Wi-Fi）', 'system');
+    speak('連線失敗，請確認手機跟電腦連同一個Wi-Fi');
+  }
+}
+
+function handleServerResponse(data) {
+  currentStage = data.stage;
+  addBubble(data.reply, 'system');
+  speak(data.reply);
+
+  updateDestMarker(data.dest_lat, data.dest_lng);
+
+  // 進入「自動推進」的導航階段時，後端會附上這段路的完整步驟清單（含座標）
+  if (data.walk_steps && data.walk_steps.length > 0) {
+    currentWalkSteps = data.walk_steps;
+    currentStepIndex = 0;
+    drawRouteLine(currentWalkSteps);
+  }
+
+  navStatusEl.classList.toggle('active', AUTO_ADVANCE_STAGES.includes(currentStage));
+
+  if (currentStage === 'idle') {
+    currentWalkSteps = [];
+    currentStepIndex = 0;
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  }
+}
+
+function addBubble(text, who) {
+  const div = document.createElement('div');
+  div.className = `bubble ${who}`;
+  div.textContent = text;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+resetBtn.addEventListener('click', async () => {
+  const confirmed = confirm('確定要重新開始嗎？目前的導航會被中斷。');
+  if (!confirmed) return;
+
+  const resp = await fetch('/api/reset', { method: 'POST' });
+  const data = await resp.json();
+  currentStage = data.stage;
+  currentWalkSteps = [];
+  currentStepIndex = 0;
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  navStatusEl.classList.remove('active');
+  logEl.innerHTML = '';
+  addBubble('已重新開始對話', 'system');
+  speak('已重新開始對話');
+});
+</script>
+
+</body>
+</html>
