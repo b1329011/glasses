@@ -11,7 +11,6 @@
     - 出口編號（指標牌上的「Y13」「Z4」「M3」）→ 弱線索（指標可能指向遠處的出口）
 連續幾張影格都指向同一個地方才播報，播一次就停，不要一直講。
 
-另外提供「找人幫忙」：組一段可以念給路人聽／顯示在螢幕上的求助句。
 
 有座標的資料（來自 OpenStreetMap，tools/osm_import.py 匯入）可以多做：
     - 最近的出口用實際距離排序，說「約幾公尺」
@@ -35,13 +34,13 @@ NEAR_SHOP_M = 40        # 「附近還有」的範圍
 EXIT_REPORT_M = 200     # 超過這個距離的出口就不報了
 AMBIG_RADIUS_M = 60     # 同名店家：離其他線索這麼近才算是那一家
 WINDOW_FRAMES = 5       # 在最近幾張影格內累計
-GIVE_UP_FRAMES = 12     # 掃了這麼多張都沒線索，就提示使用者
+HINT_FRAMES = 6         # 掃了這麼多張都沒線索，提示使用者一次
+GIVE_UP_FRAMES = 15     # 再掃不到就停止（不要一直開著鏡頭）
 MIN_OCR_CONF = 0.5
 
 EXIT_RE = re.compile(r"(?<![A-Z0-9])([YZKRM])\s*-?\s*(\d{1,2})(?!\d)")
 
 LOCATE_KEYWORDS = ["我在哪", "這裡是哪", "我現在在哪", "附近有什麼", "附近有甚麼", "最近的出口", "哪個出口"]
-HELP_KEYWORDS = ["找人幫忙", "幫我找人", "求助", "需要幫忙"]
 
 
 # ============================================================
@@ -156,7 +155,7 @@ def _round_m(d: float) -> int:
 
 def describe(anchor: dict, db: dict = None, heading: float = None, kind: str = "shop") -> dict:
     """
-    把確認過的位置轉成要播報的話，以及給「找人幫忙」用的位置短句。
+    把確認過的位置轉成要播報的話。
 
     anchor: 店家（db["shops"] 的一筆）或出口（db["exits"] 的一筆）
     heading: 使用者面向的方位角（0=北），有的話出口會說「在你左前方」
@@ -242,16 +241,6 @@ def describe(anchor: dict, db: dict = None, heading: float = None, kind: str = "
             "lat": anchor.get("lat"), "lon": anchor.get("lon")}
 
 
-def help_message(location_short: str = None, destination: str = None) -> dict:
-    """「找人幫忙」：念出來＋大字顯示在螢幕上，給路人或站務人員看。"""
-    where = f"我現在在{location_short}，" if location_short else ""
-    want = f"想去{destination}" if destination else "想找最近的出口"
-    card = f"您好，我是視障者。{where}{want}，可以請您帶我過去，或告訴我怎麼走嗎？謝謝！"
-    speak = ("好的，我把求助訊息放大顯示在螢幕上了，你可以把手機拿給旁邊的人或站務人員看。"
-             "台北車站的捷運站、台鐵高鐵大廳都有服務台。")
-    return {"card": card, "speak": speak}
-
-
 # ============================================================
 # 連續影格：累計線索，穩定後播一次就停
 # ============================================================
@@ -262,10 +251,12 @@ class LocateSession:
         self.result = None     # 確認後的 describe() 結果
         self.hinted = False
         self.ambig_told = set()
+        self.unknown_told = False
+        self.gave_up = False
 
     @property
     def done(self) -> bool:
-        return self.result is not None
+        return self.result is not None or self.gave_up
 
     def intro_text(self) -> str:
         return "好的，請慢慢左右轉頭，讓鏡頭看看附近的店家招牌，我認出來就告訴你。"
@@ -343,9 +334,20 @@ class LocateSession:
             out.update(speak=True, text=self.result["text"], done=True, result=self.result)
             return out
 
-        if self.count >= GIVE_UP_FRAMES and not self.hinted:
+        if self.count >= GIVE_UP_FRAMES:
+            self.gave_up = True
+            out.update(speak=True, done=True,
+                       text="一直認不出附近的店家，先停止掃描。可以走近一點對準招牌，再說一次「我在哪裡」。")
+            return out
+        # 讀到字、但資料裡沒有這家店：說一次，讓使用者知道有在辨識
+        if ocr_items and not clues and not self.unknown_told and \
+                any(len(_norm(str(i.get("text") if isinstance(i, dict) else i[0]))) >= 2 for i in ocr_items):
+            self.unknown_told = True
+            out.update(speak=True, text="有看到文字，但不是資料裡的店家，請轉向別的招牌試試。")
+            return out
+        if self.count >= HINT_FRAMES and not self.hinted:
             self.hinted = True
-            out.update(speak=True, text="還認不出附近的店家，試著靠近一點對準招牌，或說「找人幫忙」。")
+            out.update(speak=True, text="還沒認出附近的店家，試著靠近一點，把鏡頭對準店家招牌。")
         return out
 
 

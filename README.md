@@ -46,7 +46,7 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 
 程式位置：
 - `agent_c_navigation/modules/station_guide.py`：判斷是否在台北車站、規劃要找的指標、穩定播報
-- `agent_c_navigation/modules/station_locator.py`：讀招牌定位、組「附近有什麼、靠近哪個出口」、求助卡
+- `agent_c_navigation/modules/station_locator.py`：讀招牌定位、組「附近有什麼、靠近哪個出口」
 - `agent_c_navigation/modules/sign_client.py`：呼叫指標辨識（合併後端直接呼叫函式；單獨啟動時走 HTTP）
 - `agent_c_navigation/modules/routing.py`：`transit_legs` 支援多段搭乘（轉車）
 - `agent_c_navigation/nav_api.py`：導航 API（`station_guidance` 階段、`/sign_frame`、`/position`），掛在合併後端的 `/api/agent-c`
@@ -54,12 +54,12 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 ## 台北車站室內定位：我在哪裡、附近有什麼
 
 跟教授討論後，室內以台北車站為主，不做全程逐步導引，改成告訴使用者「大概在哪、附近有什麼、靠近哪個出口」，
-讓使用者自己判斷怎麼走，或找人幫忙。
+讓使用者自己判斷怎麼走。
 
 - **我在哪裡**（語音說「我在哪裡／附近有什麼／最近的出口」，或按 📍 按鈕）：開鏡頭，OCR 讀店家招牌和指標上的出口編號（Y13、Z4…），
   比對 `agent_c_navigation/data/taipei_main_station.json`，連續 2 張影格指向同一處才播報，播完自動關鏡頭。
+  掃描時鏡頭下方會即時顯示讀到的字；讀到字但不是資料裡的店會說一聲；約 15 張還認不出來就自動停止。
   例：「你在站前地下街（Z區），新光三越附近，靠近Z2出口（南陽街…）、Z4出口（館前路…），附近還有國立台灣博物館。」
-- **找人幫忙**（說「找人幫忙」或按 🙋 按鈕）：螢幕顯示大字求助卡，內容帶入最後確認的位置和要去的地方（例如正在找的月台），可以拿給路人或站務人員看。
 - 任何時候都能用，不會打斷正在進行的導航；原本的「依路線找指標」（淡水信義線 → 往淡水、轉乘、找出口）保留。
 
 ### 店家與出口資料

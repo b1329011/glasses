@@ -6,7 +6,6 @@
  *   走向上車處時回報 GPS → /api/position（進入台北車站範圍自動切換指標導引）
  *   台北車站指標導引：開後鏡頭，每秒送影格 → /api/sign_frame（Agent C 轉送 sign_detector）
  *   台北車站室內定位：「我在哪裡」→ 開鏡頭讀招牌 → /api/locate_frame，認出來播一次就關鏡頭
- *   找人幫忙：大字求助卡，給路人／站務人員看
  * Agent C 的 API 在合併後端的 /api/agent-c/*。
  */
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
@@ -33,7 +32,7 @@ const bubbles = ref([])
 const typed = ref('')
 const guideActive = ref(false)    // 鏡頭區塊是否顯示（指標導引或室內定位任一在用）
 const guideInfo = ref('')
-const helpCard = ref('')          // 找人幫忙的大字卡內容
+const scanSeen = ref('')          // 室內定位：這張影格讀到的字（讓使用者知道有在辨識）
 let guideTarget = null            // 指標導引目前要找的指標（null = 沒在導引）
 // 羅盤：使用者面向（0=北，順時針）。地下鋼筋會干擾磁力計，所以只送「新鮮且精度可接受」的值
 let compass = { heading: null, at: 0 }
@@ -48,6 +47,7 @@ let announcedGpsOk = false, announcedGpsFail = false
 let geoWatchId = null, recognition = null, listenTimeout = null
 let lastPositionReportAt = 0
 let guideStream = null, guideRunning = false, lastGuideError = ''
+let loopGen = 0        // 每次開鏡頭 +1；舊的迴圈發現自己過期就結束（避免連按兩次跑出兩個迴圈）
 let frameW = 0, frameH = 0
 
 // ===== 工具 =====
@@ -141,7 +141,6 @@ function handleResponse(data) {
   guideTarget = (data.stage === 'station_guidance' && data.guide_target) ? data.guide_target : null
   // 台北車站室內定位：後端說 locate 就開始掃招牌
   if (data.locate) locating = true
-  if (data.help_card) helpCard.value = data.help_card
   syncCamera()
 
   if (data.stage === 'idle') clearRoute()
@@ -205,7 +204,7 @@ async function doReset() {
     const data = await navApi.reset()
     stage.value = data.stage
   } catch (_) {}
-  guideTarget = null; locating = false; helpCard.value = ''
+  guideTarget = null; locating = false; scanSeen.value = ''
   syncCamera(); clearRoute()
   bubbles.value = []
   addBubble('已重新開始對話', 'system'); speak('已重新開始對話')
@@ -297,17 +296,18 @@ async function startCamera() {
     await nextTick()
     guideVideo.value.srcObject = guideStream
     await guideVideo.value.play()
-    cameraLoop()
+    cameraLoop(++loopGen)
   } catch (e) {
     guideRunning = false
     const msg = e.name === 'NotAllowedError' ? '請允許相機權限' : (location.protocol !== 'https:' ? '需用 https 開啟' : e.message)
     addBubble(`（無法開啟相機：${msg}）`, 'system')
-    speak('無法開啟相機，請允許相機權限，或說「找人幫忙」')
+    speak('無法開啟相機，請允許相機權限')
   }
 }
 
 function stopCamera() {
   guideRunning = false
+  loopGen++
   guideActive.value = false
   if (guideStream) guideStream.getTracks().forEach((t) => t.stop())
   guideStream = null
@@ -317,6 +317,7 @@ function stopCamera() {
 // 停止室內定位（按鈕「不用找了」）
 async function stopLocate() {
   locating = false
+  scanSeen.value = ''
   syncCamera()
   try { await navApi.command('不用找了', lat, lng) } catch (_) {}
 }
@@ -348,7 +349,6 @@ function currentHeading() {
 }
 
 function locateBtn() { askCompassPermission(); addBubble('我在哪裡', 'user'); sendCommand('我在哪裡') }
-function helpBtn() { addBubble('找人幫忙', 'user'); sendCommand('找人幫忙') }
 
 function grabFrame() {
   const v = guideVideo.value
@@ -389,8 +389,13 @@ function reportError(err) {
 async function locateStep(frame) {
   const d = await navApi.locateFrame(frame, lat, lng, currentHeading())
   reportError(d.error)
+  // 即時顯示這張影格讀到什麼，使用者才知道有在辨識
+  const read = (d.texts_read || []).filter((t) => t && t.trim())
+  const shops = (d.clues || []).map((c) => (c.kind === 'exit' ? `${c.key}出口` : c.key))
+  scanSeen.value = shops.length ? `認出：${shops.join('、')}`
+    : read.length ? `讀到：${read.slice(0, 5).join('、')}（不是資料裡的店家）` : '這張沒有讀到文字'
   if (d.speak && d.text) { addBubble(d.text, 'system'); speak(d.text) }
-  if (!d.active) { locating = false; syncCamera() }
+  if (!d.active) { locating = false; scanSeen.value = ''; syncCamera() }
 }
 
 async function guideStep(frame) {
@@ -406,8 +411,8 @@ async function guideStep(frame) {
 }
 
 // 室內定位優先（使用者主動問的），定位完再回到指標導引
-async function cameraLoop() {
-  while (guideRunning) {
+async function cameraLoop(gen) {
+  while (guideRunning && gen === loopGen) {
     const started = Date.now()
     const frame = grabFrame()
     if (frame) {
@@ -465,7 +470,6 @@ onBeforeUnmount(() => {
       <span class="chip">上車了</span><span class="chip">下車了</span>搭乘大眾運輸時確認
       <span class="chip">到了</span>台北車站站內：走到目前指標後說
       <span class="chip">我在哪裡</span>讀附近招牌，告訴你在哪、靠近哪個出口
-      <span class="chip">找人幫忙</span>顯示大字求助卡
     </div>
 
     <div v-if="AUTO_ADVANCE_STAGES.includes(stage)" class="nav-status">
@@ -481,11 +485,11 @@ onBeforeUnmount(() => {
         📷 {{ guideInfo }}
         <button v-if="guideInfo.startsWith('正在看附近')" class="secondary small" @click="stopLocate">不用找了</button>
       </div>
+      <div v-if="scanSeen" class="scan-seen">{{ scanSeen }}</div>
     </div>
 
     <div class="quick">
       <button class="quick-btn locate" @click="locateBtn">📍 我在哪裡</button>
-      <button class="quick-btn help" @click="helpBtn">🙋 找人幫忙</button>
     </div>
 
     <button class="talk" :class="{ listening }"
@@ -501,11 +505,6 @@ onBeforeUnmount(() => {
 
     <div ref="logEl" class="log" aria-live="polite">
       <div v-for="b in bubbles" :key="b.id" class="bubble" :class="b.who">{{ b.text }}</div>
-    </div>
-
-    <div v-if="helpCard" class="help-card" role="dialog" aria-label="求助訊息" @click="helpCard = ''">
-      <p>{{ helpCard }}</p>
-      <span class="help-close">點一下關閉</span>
     </div>
 
     <div class="reset">
@@ -539,14 +538,10 @@ onBeforeUnmount(() => {
 .guide-cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .guide-info { padding: 8px 12px; font-size: 15px; font-weight: 600; color: #facc15; background: #1a1d24; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .small { padding: 6px 10px; font-size: 13px; }
-.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scan-seen { padding: 6px 12px 10px; font-size: 13px; color: #cbd5e1; background: #1a1d24; }
+.quick { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .quick-btn { min-height: 64px; font-size: 19px; border-radius: 14px; }
 .quick-btn.locate { background: #facc15; color: #1a1400; }
-.quick-btn.help { background: #f97316; color: #1f0b00; }
-.help-card { position: fixed; inset: 0; z-index: 100; background: #fff; color: #000; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; padding: 28px; gap: 24px; cursor: pointer; }
-.help-card p { font-size: clamp(30px, 8vw, 46px); font-weight: 800; line-height: 1.45; margin: 0; text-align: left; }
-.help-close { font-size: 16px; color: #555; }
 .talk { align-self: center; width: 130px; height: 130px; border-radius: 50%; border: none; color: #fff; font-size: 16px; font-weight: 600;
   background: linear-gradient(145deg, #4f6bff, #3a4fd8); box-shadow: 0 8px 24px rgba(79,107,255,.4); margin: 8px 0; transition: transform .15s; user-select: none; -webkit-user-select: none; }
 .talk.listening { transform: scale(.95); background: linear-gradient(145deg, #ff5f5f, #d83a3a); animation: pulse 1s infinite; }

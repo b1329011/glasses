@@ -25,7 +25,7 @@ Agent C 語音導航 API（FastAPI router）
     POST /locate_frame      台北車站室內定位的鏡頭影格（讀招牌 → 報位置、附近店家、出口）
     POST /reset             強制重來
 
-台北車站室內定位（「我在哪裡」「附近有什麼」「找人幫忙」）跟導航流程分開：
+台北車站室內定位（「我在哪裡」「附近有什麼」）跟導航流程分開：
 任何階段都能說，不會打斷正在進行的導航。
 """
 
@@ -296,30 +296,11 @@ def _begin_navigation() -> tuple:
     return "這條路線目前還沒有詳細的逐步導航資料，建議改用其他交通方式", []
 
 
-def _help_destination():
-    """找人幫忙時要說「想去哪」：依目前導航進度挑最具體的目標。"""
-    guide = SESSION.get("guide")
-    if SESSION["stage"] == "station_guidance" and guide and not guide.done:
-        leg = _current_leg()
-        if guide.purpose == "board" and leg.get("line_name"):
-            head = f"往{leg['headsign']}方向" if leg.get("headsign") else ""
-            return f"搭{leg.get('mode', '')}{leg['line_name']}{head}的月台"
-        return "最近的出口"
-    if SESSION["stage"] in ("navigating_transit_before", "navigating_transit_wait_board"):
-        leg = _current_leg()
-        return f"{leg.get('departure_stop', '')}搭{leg.get('mode', '')}{leg.get('line_name', '')}"
-    chosen = SESSION.get("chosen_place")
-    return chosen.get("name") if chosen else None
-
-
 def _handle_locate_commands(text: str):
-    """「我在哪裡」「找人幫忙」「不用找了」；不是這類指令就回傳 None 交給導航流程。"""
-    if any(k in text for k in station_locator.HELP_KEYWORDS):
-        last = LOCATE["last"]
-        msg = station_locator.help_message(last["short"] if last else None, _help_destination())
-        return _reply(msg["speak"], extra={"help_card": msg["card"]})
-
+    """「我在哪裡」「不用找了」；不是這類指令就回傳 None 交給導航流程。"""
     if any(k in text for k in station_locator.LOCATE_KEYWORDS):
+        if LOCATE["session"] is not None and not LOCATE["session"].done:
+            return _reply("正在看附近的招牌，請稍等")      # 掃描中又按一次：不重來
         LOCATE["session"] = station_locator.LocateSession()
         return _reply(LOCATE["session"].intro_text())
 
@@ -339,7 +320,7 @@ def api_command(data: dict = Body(default={})):
     if not text:
         return _reply("沒有收到語音內容，請再說一次")
 
-    # === 台北車站室內定位 / 找人幫忙：任何階段都能用，不影響導航進度 ===
+    # === 台北車站室內定位：任何階段都能用，不影響導航進度 ===
     located = _handle_locate_commands(text)
     if located is not None:
         return located
@@ -579,7 +560,8 @@ def api_locate_frame(data: dict = Body(default={})):
     heading = data.get("heading")     # 手機羅盤（0=北）；前端判斷不可信時不會送
     out = session.process(ocr.get("texts", []), heading=float(heading) if heading is not None else None)
     if out["done"]:
-        LOCATE["last"] = out["result"]
+        if out["result"]:
+            LOCATE["last"] = out["result"]
         LOCATE["session"] = None
     return {
         "active": not out["done"],
