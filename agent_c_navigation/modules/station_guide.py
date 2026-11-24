@@ -1,6 +1,12 @@
 """
-台北車站室內指標導引模組（Agent C 導航 × sign_detector 指標辨識）
+車站指標導引模組（Agent C 導航 × sign_detector 指標辨識）
 ====================================
+任何捷運／火車／高鐵站都適用：把導航的搭乘資訊（線名、往哪、普通車/直達車）轉成要依序找的指標，
+例如「搭捷運機場線普通車往台北車站方向，在新北產業園區轉乘捷運環狀線往大坪林站方向」→
+    體育大學站：「機場捷運」→「往台北車站」（提醒搭普通車）
+    新北產業園區站（站內轉乘）：「環狀線」→「往大坪林」
+以下原本是以台北車站為例的說明：
+
 台北車站是捷運淡水信義線、板南線、機場捷運、台鐵、高鐵交會的大站，
 地下通道複雜、GPS 在站內幾乎失效，所以進到台北車站後改用「看指標牌」導引：
 
@@ -39,7 +45,7 @@ TAIPEI_MAIN_NAMES = ["台北車站", "臺北車站", "台北火車站", "臺北�
 # 台鐵/高鐵在 Google 資料裡可能只寫「臺北」「Taipei」，這些要完全相等才算（避免「台北101」誤判）
 TAIPEI_MAIN_EXACT = ["台北", "臺北", "台北站", "臺北站", "taipei", "taipei station"]
 
-RAIL_MODES = ("捷運", "火車", "高鐵")
+RAIL_MODES = ("捷運", "火車", "高鐵", "輕軌")
 
 
 def _haversine_m(lat1, lng1, lat2, lng2) -> float:
@@ -71,14 +77,21 @@ def is_at_taipei_main(stop_name: str = None, lat=None, lng=None) -> bool:
 # ============================================================
 # 路線名稱 / 方向（終點站）正規化
 # ============================================================
-# 台北車站內的路線（只有這幾條會在台北車站進出站）
+# 雙北＋機場捷運的路線（指標牌上的中文線名 → Google/口語可能出現的寫法）
 LINE_ALIASES = {
+    "文湖線": ["文湖線", "Wenhu Line", "Wenhu", "棕線", "BR"],
     "淡水信義線": ["淡水信義線", "淡水線", "信義線", "Tamsui-Xinyi Line", "Tamsui-Xinyi", "紅線", "R"],
+    "松山新店線": ["松山新店線", "松山線", "新店線", "Songshan-Xindian Line", "Songshan-Xindian", "綠線", "G"],
+    "中和新蘆線": ["中和新蘆線", "中和線", "新蘆線", "Zhonghe-Xinlu Line", "Zhonghe-Xinlu", "橘線", "O"],
     "板南線": ["板南線", "Bannan Line", "Bannan", "藍線", "BL"],
-    "機場捷運": ["機場捷運", "桃園機場捷運", "機捷", "Taoyuan Airport MRT", "Airport MRT", "A"],
+    "環狀線": ["環狀線", "Circular Line", "Circular", "黃線", "Y"],
+    "機場捷運": ["機場捷運", "桃園機場捷運", "機捷", "機場線", "Taoyuan Airport MRT", "Airport MRT", "Airport Line", "A"],
+    "淡海輕軌": ["淡海輕軌", "Danhai LRT", "Danhai"],
+    "安坑輕軌": ["安坑輕軌", "Ankeng LRT", "Ankeng"],
 }
 
-# 指標牌上寫的方向（終點站），以及會出現在 headsign 的區間車/英文寫法
+# 指標牌上寫的方向（終點站），以及會出現在 headsign 的區間車/英文寫法。
+# 表裡沒有的線或方向，會直接用 headsign（去掉「站」字），例如「往大坪林」。
 LINE_TERMINI = {
     "淡水信義線": {
         "淡水": ["淡水", "Tamsui", "北投", "Beitou"],
@@ -88,11 +101,15 @@ LINE_TERMINI = {
         "頂埔": ["頂埔", "Dingpu", "亞東醫院", "Far Eastern Hospital"],
         "南港展覽館": ["南港展覽館", "Nangang Exhibition Center", "昆陽", "Kunyang", "南港"],
     },
-    # 機場捷運在台北車站（A1）是起點，只有一個方向
     "機場捷運": {
-        "機場": ["機場", "Airport", "老街溪", "Laojie River", "環北", "Huanbei", "中壢", "航廈"],
+        "台北車站": ["台北車站", "臺北車站", "台北", "臺北", "Taipei"],
+        "機場": ["機場", "Airport", "航廈", "Terminal"],
+        "老街溪": ["老街溪", "Laojie River", "環北", "Huanbei", "中壢"],
     },
 }
+
+# 機場捷運分普通車／直達車，月台或候車位置不同，要特別提醒
+SERVICE_TYPES = ["普通車", "直達車"]
 
 
 def normalize_line(line_name: str):
@@ -108,20 +125,37 @@ def normalize_line(line_name: str):
     return None
 
 
-def normalize_terminus(line: str, headsign: str):
-    """把 headsign（可能是區間車終點或英文）轉成指標牌上寫的方向。"""
+def _strip_station(name: str) -> str:
+    n = (name or "").strip()
+    for p in ("捷運", "臺鐵", "台鐵", "高鐵"):
+        if n.startswith(p) and len(n) > len(p) + 1:
+            n = n[len(p):]
+    if n.endswith("站") and len(n) > 2 and not n.endswith("車站"):
+        n = n[:-1]
+    return n
+
+
+def normalize_terminus(line: str, headsign: str, departure_stop: str = None):
+    """
+    把 headsign（可能是區間車終點或英文）轉成指標牌上寫的方向，例如：
+        板南線 + "Dingpu" → 頂埔；機場捷運 + "台北車站" → 台北車站；環狀線 + "大坪林站" → 大坪林
+    headsign 就是上車站本身（資料怪怪的）時回傳 None。
+    """
     if not headsign:
         return None
     termini = LINE_TERMINI.get(line, {})
     for sign_name, aliases in termini.items():
         if any(a.lower() in headsign.lower() for a in aliases):
             return sign_name
-    if line == "機場捷運":
-        return "機場"
-    # 對照表沒有：照 headsign 原樣（例如台鐵「樹林」、高鐵「左營」）
-    if is_taipei_main_name(headsign):
+    t = _strip_station(headsign)
+    if departure_stop and _strip_station(departure_stop) == t:
         return None
-    return headsign.strip()
+    return t or None
+
+
+def service_type(line_name: str):
+    """機場捷運「普通車／直達車」。"""
+    return next((x for x in SERVICE_TYPES if x in (line_name or "")), None)
 
 
 # ============================================================
@@ -133,53 +167,52 @@ def _step(target: str, prompt: str) -> dict:
 
 def plan_for_boarding(leg: dict) -> list:
     """
-    要在台北車站「上車」某一段軌道運輸時，依序要找的指標。
+    要在車站「上車」某一段軌道運輸時，依序要找的指標（交給 sign_detector 的 target）。
+
+    例：機場線普通車往台北車站 → ["機場捷運", "往台北車站"]（並提醒搭普通車）
+        環狀線往大坪林站       → ["環狀線", "往大坪林"]
 
     Args:
-        leg: 一段搭乘資訊 {mode, line_name, headsign, ...}
+        leg: 一段搭乘資訊 {mode, line_name, headsign, departure_stop, ...}
     """
     mode = leg.get("mode", "")
     headsign = leg.get("headsign", "")
+    dep = leg.get("departure_stop", "")
 
-    if mode == "火車":
-        steps = [_step("台鐵", "先找「台鐵」的指標")]
-        t = normalize_terminus("", headsign)
+    if mode in ("火車", "高鐵"):
+        name = "台鐵" if mode == "火車" else "高鐵"
+        steps = [_step(name, f"先找「{name}」的指標")]
+        t = normalize_terminus("", headsign, dep)
         if t:
-            steps.append(_step(f"往{t}", f"到台鐵大廳後，找「往{t}」方向的月台指標"))
+            steps.append(_step(f"往{t}", f"到{name}大廳後，找「往{t}」方向的月台指標"))
         return steps
 
-    if mode == "高鐵":
-        steps = [_step("高鐵", "先找「高鐵」的指標")]
-        t = normalize_terminus("", headsign)
-        if t:
-            steps.append(_step(f"往{t}", f"到高鐵大廳後，找「往{t}」方向的月台指標"))
-        return steps
-
-    # 捷運
+    # 捷運 / 輕軌
     line = normalize_line(leg.get("line_name", "")) or leg.get("line_name", "")
     steps = []
     if line:
         steps.append(_step(line, f"先找「{line}」的指標"))
-    t = normalize_terminus(line, headsign)
+    t = normalize_terminus(line, headsign, dep)
     if t:
-        steps.append(_step(f"往{t}", f"接著找「往{t}」方向的月台指標"))
+        svc = service_type(leg.get("line_name", ""))
+        note = f"，要搭{svc}" if svc else ""
+        steps.append(_step(f"往{t}", f"接著找「往{t}」方向的月台指標{note}"))
     return steps
 
 
 def plan_for_exit() -> list:
-    """在台北車站下車、要出站時要找的指標。"""
+    """在車站下車、要出站時要找的指標。"""
     return [_step("出口", "找「出口」的指標")]
 
 
 def needs_boarding_guidance(leg: dict, lat=None, lng=None) -> bool:
-    """這一段是不是要在台北車站進站搭軌道運輸。"""
-    return bool(leg) and leg.get("mode") in RAIL_MODES and \
-        is_at_taipei_main(leg.get("departure_stop"), lat, lng)
+    """這一段要進站搭軌道運輸（捷運、火車、高鐵、輕軌）→ 用指標找月台。任何車站都適用。"""
+    return bool(leg) and leg.get("mode") in RAIL_MODES
 
 
 def needs_exit_guidance(leg: dict) -> bool:
-    """這一段是不是在台北車站下軌道運輸（下車後要出站或轉乘）。"""
-    return bool(leg) and leg.get("mode") in RAIL_MODES and is_taipei_main_name(leg.get("arrival_stop"))
+    """這一段下了軌道運輸（下車後要出站或轉公車）→ 用指標找出口。"""
+    return bool(leg) and leg.get("mode") in RAIL_MODES
 
 
 # ============================================================

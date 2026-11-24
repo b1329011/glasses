@@ -21,7 +21,7 @@ Agent C 語音導航 API（FastAPI router）
     POST /command           語音指令
     POST /segment_complete  前端 GPS 判斷走完一段路
     POST /position          走向上車處時回報 GPS（進入台北車站範圍自動切換指標導引）
-    POST /sign_frame        台北車站指標導引的鏡頭影格
+    POST /sign_frame        車站指標導引的鏡頭影格（找線名、往哪個方向、出口）
     POST /locate_frame      台北車站室內定位的鏡頭影格（讀招牌 → 報位置、附近店家、出口）
     POST /reset             強制重來
 
@@ -58,7 +58,7 @@ SESSION = {
     "current_route": None,
     "legs": [],          # 所有搭乘段（有轉車時 >1 段）
     "leg_index": 0,      # 目前進行到第幾段
-    "guide": None,       # 台北車站指標導引 session（station_guide.SignGuidanceSession）
+    "guide": None,       # 車站指標導引 session（station_guide.SignGuidanceSession）
 }
 
 # 台北車站室內定位：跟導航狀態分開，取消導航不會清掉「最後確認的位置」
@@ -168,9 +168,16 @@ def _transit_boarding_prompt(prefix: str = "") -> str:
 
 
 # ============================================================
-# 台北車站指標導引（呼叫 sign_detector）
+# 車站指標導引（呼叫 sign_detector）：任何捷運／火車／高鐵站都適用
 # ============================================================
-def _start_guidance(plan: list, purpose: str, reason: str, prefix: str = "") -> tuple:
+def _same_station(a: str, b: str) -> bool:
+    """轉乘的下車站和上車站是不是同一站（同站就在站內找指標，不同站要先出站走過去）。"""
+    if station_guide.is_taipei_main_name(a) and station_guide.is_taipei_main_name(b):
+        return True
+    return bool(a) and station_guide._strip_station(a) == station_guide._strip_station(b)
+
+
+def _start_guidance(plan: list, purpose: str, reason: str, prefix: str = "", station: str = "") -> tuple:
     """
     進入 station_guidance 階段。purpose：
       board          → 找月台，走完直接進「等車確認」
@@ -182,7 +189,9 @@ def _start_guidance(plan: list, purpose: str, reason: str, prefix: str = "") -> 
     if guide.done:
         return _finish_guidance(prefix)
     SESSION["stage"] = "station_guidance"
-    return prefix + guide.intro_text() + "。想知道自己在哪、附近有什麼，可以說「我在哪裡」", []
+    # 「我在哪裡」只有台北車站有店家資料
+    tail = "。想知道自己在哪、附近有什麼，可以說「我在哪裡」" if station_guide.is_taipei_main_name(station) else ""
+    return prefix + guide.intro_text() + tail, []
 
 
 def _finish_guidance(prefix: str = "") -> tuple:
@@ -197,12 +206,13 @@ def _finish_guidance(prefix: str = "") -> tuple:
 
 
 def _arrive_at_boarding_stop(lat=None, lng=None, prefix: str = "") -> tuple:
-    """走到（或轉乘到）這一段的上車處：台北車站軌道運輸就先用指標帶到月台，否則直接等車確認。"""
+    """走到（或轉乘到）這一段的上車處：軌道運輸就先用指標帶到月台，公車直接等車確認。"""
     leg = _current_leg()
     if station_guide.needs_boarding_guidance(leg, lat, lng):
         plan = station_guide.plan_for_boarding(leg)
-        return _start_guidance(plan, "board", reason=f"已到達台北車站，要搭{leg.get('mode', '')}{leg.get('line_name', '')}",
-                               prefix=prefix)
+        dep = leg.get("departure_stop", "車站")
+        return _start_guidance(plan, "board", reason=f"已到達{dep}，要搭{leg.get('mode', '')}{leg.get('line_name', '')}",
+                               prefix=prefix, station=dep)
     return _transit_boarding_prompt(prefix=prefix), []
 
 
@@ -237,19 +247,21 @@ def _after_alighting() -> tuple:
         SESSION["leg_index"] = next_index
         prefix = (f"好的，接下來在{leg.get('arrival_stop', '這一站')}轉乘"
                   f"{next_leg.get('mode', '')}{next_leg.get('line_name', '')}。")
-        if station_guide.needs_boarding_guidance(next_leg):
-            # 台北車站站內轉乘：直接用指標帶到下一條線的月台
+        here = leg.get("arrival_stop", "這一站")
+        if station_guide.needs_boarding_guidance(next_leg) and _same_station(here, next_leg.get("departure_stop")):
+            # 站內轉乘（例如新北產業園區：機場捷運 → 環狀線）：直接用指標帶到下一條線的月台
             plan = station_guide.plan_for_boarding(next_leg)
-            return _start_guidance(plan, "board", reason="在台北車站轉乘", prefix=prefix)
+            return _start_guidance(plan, "board", reason=f"在{here}轉乘", prefix=prefix, station=here)
         if station_guide.needs_exit_guidance(leg):
-            # 台北車站下捷運/火車，要出站轉公車
+            # 下捷運/火車，要出站轉公車或走到別的車站
             return _start_guidance(station_guide.plan_for_exit(), "exit_transfer",
-                                   reason="在台北車站下車，要先出站轉乘", prefix=prefix)
+                                   reason=f"在{here}下車，要先出站轉乘", prefix=prefix, station=here)
         return _proceed_to_current_leg(prefix=prefix)
 
     if station_guide.needs_exit_guidance(leg):
+        here = leg.get("arrival_stop", "車站")
         return _start_guidance(station_guide.plan_for_exit(), "exit",
-                               reason="在台北車站下車，要出站")
+                               reason=f"在{here}下車，要出站", station=here)
     return _walk_to_destination()
 
 

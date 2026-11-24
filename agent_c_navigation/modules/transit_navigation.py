@@ -35,7 +35,7 @@ def _walk(steps: list, last_needs_trigger: bool = True) -> bool:
 
 
 def _guide(plan: list, purpose: str, reason: str) -> bool:
-    """台北車站站內指標導引（文字模擬版）；回傳 False 表示使用者取消。"""
+    """車站指標導引（文字模擬版）；回傳 False 表示使用者取消。"""
     session = station_guide.SignGuidanceSession(plan, purpose, reason=reason)
     if session.done:
         return True
@@ -61,7 +61,7 @@ def narrate_transit_route(route: dict) -> bool:
     逐步播報一條大眾運輸路線（支援轉車），每一段涵蓋：
     走到站牌/月台 → 等車確認 → 上車 → 坐幾站 → 下車；最後走到目的地。
 
-    在台北車站搭/下/轉軌道運輸時，會插入「指標導引」：
+    搭/下/轉軌道運輸（捷運、火車、高鐵）時，會插入「指標導引」：
     依路線產生要找的指標（例如「淡水信義線」→「往淡水」、「出口」），
     把鏡頭影像送給 sign_detector 辨識方向。
 
@@ -80,18 +80,20 @@ def narrate_transit_route(route: dict) -> bool:
         mode = leg.get("mode", "大眾運輸")
         prev = legs[i - 1] if i > 0 else None
 
-        # === 第①段：走到站牌/月台（台北車站軌道運輸改用指標導引）===
+        # === 第①段：走到站牌/月台（軌道運輸進站後改用指標導引）===
         if prev is not None:
             voice_io.speak(f"接下來在{prev.get('arrival_stop', '這一站')}轉乘{mode}{leg.get('line_name', '')}")
 
-        if prev is not None and station_guide.needs_boarding_guidance(leg):
-            # 台北車站站內轉乘：直接用指標找下一條線的月台
-            if not _guide(station_guide.plan_for_boarding(leg), "board", "在台北車站轉乘"):
+        same = prev is not None and station_guide._strip_station(prev.get("arrival_stop", "")) == \
+            station_guide._strip_station(leg.get("departure_stop", ""))
+        if prev is not None and station_guide.needs_boarding_guidance(leg) and same:
+            # 站內轉乘：直接用指標找下一條線的月台
+            if not _guide(station_guide.plan_for_boarding(leg), "board", f"在{prev.get('arrival_stop')}轉乘"):
                 return False
             voice_io.speak("已到達月台")
         else:
             if prev is not None and station_guide.needs_exit_guidance(prev):
-                if not _guide(station_guide.plan_for_exit(), "exit_transfer", "在台北車站下車，要先出站轉乘"):
+                if not _guide(station_guide.plan_for_exit(), "exit_transfer", f"在{prev.get('arrival_stop')}下車，要先出站轉乘"):
                     return False
             steps_before = leg.get("steps_before") or []
             if steps_before:
@@ -101,7 +103,7 @@ def narrate_transit_route(route: dict) -> bool:
             elif prev is None:
                 voice_io.speak(f"請前往{leg.get('departure_stop', '站牌')}")
             if station_guide.needs_boarding_guidance(leg):
-                reason = f"已到達台北車站，要搭{mode}{leg.get('line_name', '')}"
+                reason = f"已到達{leg.get('departure_stop', '車站')}，要搭{mode}{leg.get('line_name', '')}"
                 if not _guide(station_guide.plan_for_boarding(leg), "board", reason):
                     return False
                 voice_io.speak("已到達月台")
@@ -134,9 +136,9 @@ def narrate_transit_route(route: dict) -> bool:
         if not _wait_for(["下車了", "下車", "已經下車", "到了"], "請在下車後告訴我「下車了」，或說「取消」結束導航"):
             return False
 
-    # === 第④段：最後一段下車後（台北車站先出站），走到目的地 ===
+    # === 第④段：最後一段下車後（軌道運輸先找出口），走到目的地 ===
     if station_guide.needs_exit_guidance(legs[-1]):
-        if not _guide(station_guide.plan_for_exit(), "exit", "在台北車站下車，要出站"):
+        if not _guide(station_guide.plan_for_exit(), "exit", f"在{legs[-1].get('arrival_stop')}下車，要出站"):
             return False
 
     steps_after = route.get("steps_after", [])
