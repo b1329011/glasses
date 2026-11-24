@@ -1,1 +1,62 @@
 # glasses
+
+視障輔助智慧眼鏡：室外導航（Agent C）＋ 地下街指標牌辨識（sign_detector）。
+
+```
+glasses/
+├── agent_c_navigation/   # 室外導航：語音指令、路線規劃、逐步導航（Flask，port 8080）
+├── sign-detection/       # 指標牌 YOLO 訓練 / 匯出 / 推論 pipeline（best.pt）
+└── webapp/               # 指標牌標註/訓練/辨識介面 + 導航 API（FastAPI，port 8000）
+```
+
+## 兩者怎麼串起來：台北車站指標導引
+
+導航偵測到使用者「在台北車站」時，依路線決定要找哪些指標，把鏡頭影格送給
+sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「淡水信義線在往左的方向」）。
+
+**什麼時候算在台北車站**：路線上的站名是台北車站，或 GPS 進入台北車站周圍 350 公尺內，
+而且這時要進出的是捷運、台鐵或高鐵。在台北車站站牌搭公車不會觸發。
+
+| 情境 | 依序要找的指標 |
+|---|---|
+| 在台北車站搭淡水信義線往淡水 | `淡水信義線` → `往淡水` |
+| 板南線到台北車站，站內轉淡水信義線往象山 | `淡水信義線` → `往象山` |
+| 轉機場捷運 | `機場捷運` → `往機場` |
+| 轉台鐵／高鐵 | `台鐵` → `往樹林`／`高鐵` → `往左營` |
+| 在台北車站下車要出站（或出站轉公車） | `出口` |
+
+- 區間車與英文終點站會先換成指標牌上寫的方向，例如 `北投`→`往淡水`、`Dingpu`→`往頂埔`、`亞東醫院`→`往頂埔`
+- 連續 2 張影格方向一致才播報，同一句 8 秒內不重複；沒看到目標時，會提示使用者轉頭找
+- 使用者走到目前的指標後說「到了」就換下一個指標；最後一個走完，會接著進入「確認上車」或「走向目的地」
+
+程式位置：
+- `agent_c_navigation/modules/station_guide.py`：判斷是否在台北車站、規劃要找的指標、穩定播報
+- `agent_c_navigation/modules/sign_client.py`：用 HTTP 呼叫 sign_detector
+- `agent_c_navigation/modules/routing.py`：`transit_legs` 支援多段搭乘（轉車）
+- `agent_c_navigation/app.py`：新增 `station_guidance` 階段、`/api/sign_frame`、`/api/position`
+
+## 執行
+
+```bash
+# 1. 指標辨識服務（需要 ultralytics + OCR）
+cd webapp/backend
+pip install -r requirements.txt
+uvicorn main:app --port 8000
+
+# 2. 導航（另一個終端機）
+cd agent_c_navigation
+pip install -r requirements.txt
+python3 app.py          # 手機版（https://電腦IP:8080），進到台北車站會自動開後鏡頭
+python3 main.py         # 文字模擬版
+python3 modules/transit_navigation.py transfer   # 直接跑「板南線→台北車站轉淡水信義線」示範
+```
+
+`agent_c_navigation/.env` 可設定：
+
+```
+SIGN_DETECTOR_URL=http://127.0.0.1:8000   # sign_detector 位址（預設）
+SIGN_DETECTOR_MOCK=1                       # 沒有模型時用模擬辨識結果展示流程
+```
+
+沒有 Google Maps 金鑰時，假資料路線池裡有一條轉乘示範路線：說「導航去台北車站」，
+再說兩次「換一個」就能選到它。

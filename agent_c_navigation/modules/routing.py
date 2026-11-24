@@ -108,6 +108,35 @@ MOCK_ROUTE_POOL = [
         ],
     },
     {
+        # 轉乘示範：板南線到台北車站，站內轉淡水信義線（會觸發台北車站指標導引）
+        "mode": "捷運",
+        "summary": "走路3分鐘到市政府站，搭捷運板南線往頂埔方向，在台北車站轉乘捷運淡水信義線往淡水方向",
+        "walk_to_station_min": 3,
+        "wait_min": 4,
+        "total_min": 30,
+        "landmark": "上車地點：市政府站",
+        "steps_before": [
+            {"instruction": "沿市府路走向市政府站入口", "distance_m": 200, "voice_text": "走約286步後，沿市府路走向市政府站入口"},
+        ],
+        "departure_stop": "市政府站",
+        "arrival_stop": "台北車站",
+        "line_name": "板南線",
+        "headsign": "頂埔",
+        "stop_count": 4,
+        "transit_legs": [
+            {"mode": "捷運", "line_name": "板南線", "headsign": "頂埔", "departure_stop": "市政府站",
+             "arrival_stop": "台北車站", "stop_count": 4, "wait_min": 4,
+             "steps_before": [
+                 {"instruction": "沿市府路走向市政府站入口", "distance_m": 200, "voice_text": "走約286步後，沿市府路走向市政府站入口"},
+             ]},
+            {"mode": "捷運", "line_name": "淡水信義線", "headsign": "淡水", "departure_stop": "台北車站",
+             "arrival_stop": "雙連站", "stop_count": 2, "wait_min": 3, "steps_before": []},
+        ],
+        "steps_after": [
+            {"instruction": "出站後直走即為目的地", "distance_m": 120, "voice_text": "走約171步後，出站後直走即為目的地"},
+        ],
+    },
+    {
         "mode": "步行",
         "summary": "全程步行，會經過信義商圈",
         "walk_to_station_min": 0,
@@ -130,11 +159,47 @@ def _parse_duration_seconds(duration_str: str) -> int:
     return int(str(duration_str).rstrip("s"))
 
 
+def _parse_transit_leg(step: dict) -> dict:
+    """把一個 TRANSIT step 解析成一段搭乘資訊。"""
+    details = step["transitDetails"]
+    line_info = details.get("transitLine", {})
+    vehicle_label = VEHICLE_TYPE_MAP.get(line_info.get("vehicle", {}).get("type", ""), "大眾運輸")
+    line_name = line_info.get("nameShort") or line_info.get("name") or "未知路線"
+    # 捷運的 nameShort 可能只是代碼（BL/R），有完整名稱時優先用完整名稱翻譯（公車維持路線號碼）
+    if vehicle_label != "公車" and line_info.get("name") and len(line_name) <= 3:
+        line_name = line_info["name"]
+    line_name = _translate_line_name(line_name)
+
+    # headway是「平均班距」，用來估計候車時間（不是即時到站時間，
+    # 真正即時到站時間是靠 transit.py 呼叫TDX API取得，這裡只是沒有TDX資料時的估計值）
+    headway_sec = details.get("headway", None)
+    wait_min = round(int(str(headway_sec).rstrip("s")) / 60) if headway_sec else 5
+
+    leg = {
+        "mode": vehicle_label,
+        "line_name": line_name,
+        "headsign": details.get("headsign", ""),
+        "departure_stop": details.get("stopDetails", {}).get("departureStop", {}).get("name", "附近站牌"),
+        "arrival_stop": details.get("stopDetails", {}).get("arrivalStop", {}).get("name", "目的地站"),
+        "stop_count": details.get("stopCount", None),
+        "wait_min": wait_min,
+        "steps_before": [],   # 走到這一段上車處的步驟（第一段＝從起點走過去；之後＝轉乘步行）
+    }
+    if vehicle_label == "公車":
+        leg["route_name"] = line_name
+    return leg
+
+
 def _extract_transit_summary(route_data: dict) -> dict:
     """
     從 Routes API 的完整回應中，解析出完整的大眾運輸搭乘資訊，
-    包含上車前走路段、搭乘細節（站名/路線/方向/站數）、下車後走路段，
+    包含上車前走路段、每一段搭乘細節（站名/路線/方向/站數，含轉乘）、下車後走路段，
     這樣才有足夠資訊做完整的逐步語音導航（不只是摘要）。
+
+    回傳格式：
+      - 最上層的 departure_stop / line_name / headsign ... 是「第一段」的資訊（舊程式照用）
+      - transit_legs：所有搭乘段（有轉車時 >1 段），每段的 steps_before 是走到該段上車處的步驟
+      - steps_after：最後一段下車後走到目的地的步驟
 
     Returns:
         dict: 統一格式的路線資訊，找不到搭乘細節時回傳 None（呼叫端會fallback）
@@ -150,69 +215,71 @@ def _extract_transit_summary(route_data: dict) -> dict:
     if not legs:
         return None
 
-    all_steps = legs[0].get("steps", [])
-
-    # 把整條路線切成三段：上車前的走路段、大眾運輸段、下車後的走路段
-    steps_before = []
-    transit_step = None
-    steps_after = []
-
-    for step in all_steps:
-        if step.get("travelMode") == "TRANSIT" and "transitDetails" in step and transit_step is None:
-            transit_step = step
-        elif transit_step is None:
-            steps_before.append(step)
+    # 依序切段：遇到 TRANSIT 就開一段新的搭乘，中間的 WALK 歸給「下一段的上車前步行」
+    transit_legs = []
+    pending_walk = []
+    first_walk_raw = []
+    for step in legs[0].get("steps", []):
+        if step.get("travelMode") == "TRANSIT" and "transitDetails" in step:
+            leg = _parse_transit_leg(step)
+            leg["steps_before"] = _parse_walk_step_list(pending_walk)
+            if not transit_legs:
+                first_walk_raw = pending_walk
+            transit_legs.append(leg)
+            pending_walk = []
         else:
-            steps_after.append(step)
+            pending_walk.append(step)
 
-    if transit_step is None:
+    if not transit_legs:
         return None
 
-    walk_before_list = _parse_walk_step_list(steps_before)
-    walk_after_list = _parse_walk_step_list(steps_after)
-    walk_min = round(sum(_parse_duration_seconds(s.get("staticDuration", "0s")) for s in steps_before) / 60)
+    first = transit_legs[0]
+    walk_min = round(sum(_parse_duration_seconds(s.get("staticDuration", "0s")) for s in first_walk_raw) / 60)
 
-    details = transit_step["transitDetails"]
-    departure_stop = details.get("stopDetails", {}).get("departureStop", {}).get("name", "附近站牌")
-    arrival_stop = details.get("stopDetails", {}).get("arrivalStop", {}).get("name", "目的地站")
-    line_info = details.get("transitLine", {})
-    line_name = line_info.get("nameShort") or line_info.get("name") or "未知路線"
-    line_name = _translate_line_name(line_name)
-    vehicle_type_raw = line_info.get("vehicle", {}).get("type", "")
-    vehicle_label = VEHICLE_TYPE_MAP.get(vehicle_type_raw, "大眾運輸")
-    headsign = details.get("headsign", "")
-    stop_count = details.get("stopCount", None)
-
-    # headway是「平均班距」，用來估計候車時間（不是即時到站時間，
-    # 真正即時到站時間是靠 transit.py 呼叫TDX API取得，這裡只是沒有TDX資料時的估計值）
-    headway_sec = details.get("headway", None)
-    wait_min = round(int(str(headway_sec).rstrip("s")) / 60) if headway_sec else 5
-
-    summary = f"走路{walk_min}分鐘到{departure_stop}，搭{vehicle_label}{line_name}"
-    if headsign:
-        summary += f"往{headsign}方向"
+    summary = f"走路{walk_min}分鐘到{first['departure_stop']}，搭{first['mode']}{first['line_name']}"
+    if first["headsign"]:
+        summary += f"往{first['headsign']}方向"
+    for prev, leg in zip(transit_legs, transit_legs[1:]):
+        summary += f"，在{prev['arrival_stop']}轉乘{leg['mode']}{leg['line_name']}"
+        if leg["headsign"]:
+            summary += f"往{leg['headsign']}方向"
 
     result = {
-        "mode": vehicle_label,
+        "mode": first["mode"],
         "summary": summary,
         "walk_to_station_min": walk_min,
-        "wait_min": wait_min,
+        "wait_min": first["wait_min"],
         "total_min": total_min,
-        "landmark": f"上車地點：{departure_stop}",
-        # 以下是逐步語音導航要用的完整資訊
-        "steps_before": walk_before_list,   # 走到站牌/月台的步驟
-        "departure_stop": departure_stop,   # 上車站名
-        "arrival_stop": arrival_stop,       # 下車站名
-        "line_name": line_name,             # 路線名稱
-        "headsign": headsign,               # 往哪個方向
-        "stop_count": stop_count,           # 中途共幾站
-        "steps_after": walk_after_list,     # 下車後走到目的地的步驟
+        "landmark": f"上車地點：{first['departure_stop']}",
+        # 以下是逐步語音導航要用的完整資訊（第一段，向下相容）
+        "steps_before": first["steps_before"],
+        "departure_stop": first["departure_stop"],
+        "arrival_stop": first["arrival_stop"],
+        "line_name": first["line_name"],
+        "headsign": first["headsign"],
+        "stop_count": first["stop_count"],
+        "steps_after": _parse_walk_step_list(pending_walk),
+        "transit_legs": transit_legs,
     }
 
-    if vehicle_label == "公車":
-        result["route_name"] = line_name
+    if first["mode"] == "公車":
+        result["route_name"] = first["line_name"]
 
     return result
+
+
+def get_transit_legs(route: dict) -> list:
+    """
+    取得路線的所有搭乘段。舊格式（沒有 transit_legs，例如假資料）就用最上層欄位組出單一段，
+    讓呼叫端不用分兩種情況處理。
+    """
+    if route.get("transit_legs"):
+        return route["transit_legs"]
+    if not route.get("departure_stop"):
+        return []
+    keys = ("mode", "line_name", "headsign", "departure_stop", "arrival_stop",
+            "stop_count", "wait_min", "route_name", "steps_before")
+    return [{k: route.get(k) for k in keys if k in route}]
 
 
 def _parse_walk_step_list(step_list: list) -> list:

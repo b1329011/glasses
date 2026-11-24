@@ -1,8 +1,8 @@
 # === agent_c_navigation ===
 .env
-venv/
+**/venv/
 __pycache__/
-modules/.cache/
+**/modules/.cache/
 *.pyc
 .DS_Store
 

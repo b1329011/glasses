@@ -19,91 +19,131 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from modules import voice_io, turn_by_turn
+from modules import voice_io, turn_by_turn, routing, station_guide
+
+
+def _walk(steps: list, last_needs_trigger: bool = True) -> bool:
+    """逐句播報走路段；回傳 False 表示使用者取消。"""
+    for i, step in enumerate(steps):
+        voice_io.speak(step["voice_text"])
+        if not last_needs_trigger and i == len(steps) - 1:
+            break
+        if turn_by_turn.wait_for_next_trigger() == "stop":
+            voice_io.speak("好的，已取消導航")
+            return False
+    return True
+
+
+def _guide(plan: list, purpose: str, reason: str) -> bool:
+    """台北車站站內指標導引（文字模擬版）；回傳 False 表示使用者取消。"""
+    session = station_guide.SignGuidanceSession(plan, purpose, reason=reason)
+    if session.done:
+        return True
+    ok = station_guide.run_cli_guidance(session, voice_io.speak, voice_io.listen, turn_by_turn.STOP_KEYWORDS)
+    if not ok:
+        voice_io.speak("好的，已取消導航")
+    return ok
+
+
+def _wait_for(keywords: list, retry_text: str) -> bool:
+    while True:
+        user_text = voice_io.listen()
+        if any(kw in user_text for kw in keywords):
+            return True
+        if any(kw in user_text for kw in turn_by_turn.STOP_KEYWORDS):
+            voice_io.speak("好的，已取消導航")
+            return False
+        voice_io.speak(retry_text)
 
 
 def narrate_transit_route(route: dict) -> bool:
     """
-    逐步播報一條大眾運輸路線，涵蓋：走到站牌→等車確認→上車→坐幾站→下車→走到目的地。
+    逐步播報一條大眾運輸路線（支援轉車），每一段涵蓋：
+    走到站牌/月台 → 等車確認 → 上車 → 坐幾站 → 下車；最後走到目的地。
+
+    在台北車站搭/下/轉軌道運輸時，會插入「指標導引」：
+    依路線產生要找的指標（例如「淡水信義線」→「往淡水」、「出口」），
+    把鏡頭影像送給 sign_detector 辨識方向。
 
     Args:
-        route: routing.py 產生的路線dict，需包含 steps_before/departure_stop/
-               arrival_stop/line_name/headsign/stop_count/steps_after
+        route: routing.py 產生的路線dict（有 transit_legs 時走多段，否則用最上層欄位當單段）
 
     Returns:
         bool: True 表示走完全程，False 表示使用者中途取消
     """
-    mode = route.get("mode", "大眾運輸")
+    legs = routing.get_transit_legs(route)
+    if not legs:
+        voice_io.speak("這條路線沒有搭乘資訊")
+        return False
 
-    # === 第①段：走到站牌/月台 ===
-    steps_before = route.get("steps_before", [])
-    if steps_before:
-        voice_io.speak(f"先走到{route.get('departure_stop', '站牌')}")
-        for step in steps_before:
-            voice_io.speak(step["voice_text"])
-            signal = turn_by_turn.wait_for_next_trigger()
-            if signal == "stop":
-                voice_io.speak("好的，已取消導航")
+    for i, leg in enumerate(legs):
+        mode = leg.get("mode", "大眾運輸")
+        prev = legs[i - 1] if i > 0 else None
+
+        # === 第①段：走到站牌/月台（台北車站軌道運輸改用指標導引）===
+        if prev is not None:
+            voice_io.speak(f"接下來在{prev.get('arrival_stop', '這一站')}轉乘{mode}{leg.get('line_name', '')}")
+
+        if prev is not None and station_guide.needs_boarding_guidance(leg):
+            # 台北車站站內轉乘：直接用指標找下一條線的月台
+            if not _guide(station_guide.plan_for_boarding(leg), "board", "在台北車站轉乘"):
                 return False
-    else:
-        voice_io.speak(f"請前往{route.get('departure_stop', '站牌')}")
+            voice_io.speak("已到達月台")
+        else:
+            if prev is not None and station_guide.needs_exit_guidance(prev):
+                if not _guide(station_guide.plan_for_exit(), "exit_transfer", "在台北車站下車，要先出站轉乘"):
+                    return False
+            steps_before = leg.get("steps_before") or []
+            if steps_before:
+                voice_io.speak(f"先走到{leg.get('departure_stop', '站牌')}")
+                if not _walk(steps_before):
+                    return False
+            elif prev is None:
+                voice_io.speak(f"請前往{leg.get('departure_stop', '站牌')}")
+            if station_guide.needs_boarding_guidance(leg):
+                reason = f"已到達台北車站，要搭{mode}{leg.get('line_name', '')}"
+                if not _guide(station_guide.plan_for_boarding(leg), "board", reason):
+                    return False
+                voice_io.speak("已到達月台")
 
-    # === 第②段：等車確認（最重要的環節，講清楚方向避免上錯車）===
-    line_name = route.get("line_name", "")
-    headsign = route.get("headsign", "")
-    wait_min = route.get("wait_min", None)
+        # === 第②段：等車確認（最重要的環節，講清楚方向避免上錯車）===
+        line_name = leg.get("line_name", "")
+        headsign = leg.get("headsign", "")
+        wait_min = leg.get("wait_min", None)
 
-    confirm_text = f"到了{route.get('departure_stop', '站牌')}，請確認搭乘{mode}{line_name}"
-    if headsign:
-        confirm_text += f"，往{headsign}方向"
-    if wait_min is not None:
-        confirm_text += f"，預計{wait_min}分鐘後進站"
-    voice_io.speak(confirm_text)
-    voice_io.speak("上車後請說「上車了」，我會提醒你什麼時候下車")
+        confirm_text = f"到了{leg.get('departure_stop', '站牌')}，請確認搭乘{mode}{line_name}"
+        if headsign:
+            confirm_text += f"，往{headsign}方向"
+        if wait_min is not None:
+            confirm_text += f"，預計{wait_min}分鐘後進站"
+        voice_io.speak(confirm_text)
+        voice_io.speak("上車後請說「上車了」，我會提醒你什麼時候下車")
 
-    # 等待使用者確認上車（這是明確的動作確認，不是單純推進，所以用專屬關鍵字判斷）
-    while True:
-        user_text = voice_io.listen()
-        if any(kw in user_text for kw in ["上車了", "上車", "已經上車"]):
-            break
-        if any(kw in user_text for kw in turn_by_turn.STOP_KEYWORDS):
-            voice_io.speak("好的，已取消導航")
+        if not _wait_for(["上車了", "上車", "已經上車"], "請在上車後告訴我「上車了」，或說「取消」結束導航"):
             return False
-        voice_io.speak("請在上車後告訴我「上車了」，或說「取消」結束導航")
 
-    # === 第③段：坐幾站，提醒下車 ===
-    stop_count = route.get("stop_count", None)
-    arrival_stop = route.get("arrival_stop", "目的地站")
+        # === 第③段：坐幾站，提醒下車 ===
+        stop_count = leg.get("stop_count", None)
+        arrival_stop = leg.get("arrival_stop", "目的地站")
+        if stop_count:
+            voice_io.speak(f"好的，坐{stop_count}站，到{arrival_stop}要下車")
+        else:
+            voice_io.speak(f"請留意廣播，到{arrival_stop}要下車")
+        voice_io.speak("到站後請說「下車了」")
 
-    if stop_count:
-        voice_io.speak(f"好的，坐{stop_count}站，到{arrival_stop}要下車")
-    else:
-        voice_io.speak(f"請留意廣播，到{arrival_stop}要下車")
-
-    voice_io.speak("到站後請說「下車了」")
-
-    while True:
-        user_text = voice_io.listen()
-        if any(kw in user_text for kw in ["下車了", "下車", "已經下車", "到了"]):
-            break
-        if any(kw in user_text for kw in turn_by_turn.STOP_KEYWORDS):
-            voice_io.speak("好的，已取消導航")
+        if not _wait_for(["下車了", "下車", "已經下車", "到了"], "請在下車後告訴我「下車了」，或說「取消」結束導航"):
             return False
-        voice_io.speak("請在下車後告訴我「下車了」，或說「取消」結束導航")
 
-    # === 第④段：下車後走到目的地 ===
+    # === 第④段：最後一段下車後（台北車站先出站），走到目的地 ===
+    if station_guide.needs_exit_guidance(legs[-1]):
+        if not _guide(station_guide.plan_for_exit(), "exit", "在台北車站下車，要出站"):
+            return False
+
     steps_after = route.get("steps_after", [])
     if steps_after:
         voice_io.speak("下車後繼續走向目的地")
-        for i, step in enumerate(steps_after):
-            voice_io.speak(step["voice_text"])
-            is_last = (i == len(steps_after) - 1)
-            if is_last:
-                break
-            signal = turn_by_turn.wait_for_next_trigger()
-            if signal == "stop":
-                voice_io.speak("好的，已取消導航")
-                return False
+        if not _walk(steps_after, last_needs_trigger=False):
+            return False
 
     voice_io.speak("已到達目的地附近，導航結束")
     return True
@@ -111,6 +151,14 @@ def narrate_transit_route(route: dict) -> bool:
 
 if __name__ == "__main__":
     # 快速測試：用一組假的捷運路線資料跑一次完整播報流程
+    # （加參數 transfer 改跑「板南線 → 台北車站轉淡水信義線」的轉乘示範）
+    if len(sys.argv) > 1 and sys.argv[1] == "transfer":
+        test_route = next(r for r in routing.MOCK_ROUTE_POOL if r.get("transit_legs"))
+        print(f"轉乘示範：{test_route['summary']}")
+        print("（台北車站指標導引階段：Enter=模擬影格、輸入圖片路徑=真實辨識、「到了」=下一步）\n")
+        completed = narrate_transit_route(test_route)
+        print(f"\n測試結果：{'完整走完' if completed else '中途取消'}")
+        sys.exit(0)
     test_route = {
         "mode": "捷運",
         "departure_stop": "市政府站",

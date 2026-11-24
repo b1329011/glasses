@@ -115,7 +115,12 @@ agent_c_outdoor/
 
 ---
 
-## 室內模組接續方式
+## 台北車站指標導引（已串接 sign_detector）
+
+在台北車站搭乘、轉乘或下車時，會改用鏡頭看指標牌帶路，說明見根目錄 `README.md`。
+相關模組：`modules/station_guide.py`、`modules/sign_client.py`。
+
+## 室內模組接續方式（原始規劃）
 
 室外模組跑到「使用者走到室內入口（如捷運站門口）」時，會觸發交接邏輯：
 

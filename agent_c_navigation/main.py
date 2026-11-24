@@ -112,14 +112,14 @@ def start_navigation(route: dict):
     依交通方式分流：
     - 步行：走真實逐步導航（turn_by_turn.py）
     - 公車/捷運：走真實逐步導航（transit_navigation.py），涵蓋走到站牌→
-      等車確認→上車→坐幾站→下車→走到目的地
+      等車確認→上車→坐幾站→下車→走到目的地（支援轉車；台北車站站內改用指標導引）
     - 其他/資料不完整時：退回示意版
     """
     voice_io.speak("好的，開始導航")
 
     if route["mode"] == "步行" and route.get("steps"):
         turn_by_turn.narrate_walk_route(route)
-    elif route["mode"] in ("公車", "捷運") and route.get("departure_stop"):
+    elif route["mode"] in ("公車", "捷運", "火車", "高鐵") and route.get("departure_stop"):
         transit_navigation.narrate_transit_route(route)
     else:
         simulate_turn_by_turn(route)

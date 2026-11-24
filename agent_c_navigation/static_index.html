@@ -157,6 +157,21 @@
     border-radius: 20px;
     font-size: 13px;
   }
+
+  /* ===== 台北車站指標導引（鏡頭）===== */
+  .guide-panel {
+    display: none;
+    width: 100%;
+    max-width: 480px;
+    margin: 8px 0;
+    border: 2px solid #facc15;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+  }
+  .guide-panel.active { display: block; }
+  .guide-panel video { width: 100%; max-height: 260px; object-fit: cover; display: block; }
+  .guide-panel .guide-info { padding: 8px 10px; font-size: 14px; color: #facc15; background: #1a1d24; }
 </style>
 </head>
 <body>
@@ -182,9 +197,15 @@
   <span class="tag">好 / 開始</span>確認出發
   <span class="tag">取消</span>隨時中斷導航
   <span class="tag">上車了</span><span class="tag">下車了</span>搭乘大眾運輸時確認
+  <span class="tag">到了</span>台北車站站內：走到目前指標後說
 </div>
 
 <div class="nav-status" id="navStatus">🚶 導航進行中，系統會依你走到的位置自動報路，不需要開口確認每一步，只有想取消時才需要說話</div>
+
+<div class="guide-panel" id="guidePanel">
+  <video id="guideVideo" playsinline muted autoplay></video>
+  <div class="guide-info" id="guideInfo">📷 指標導引中</div>
+</div>
 
 <button class="talk-btn" id="talkBtn">按住<br>說話</button>
 
@@ -328,6 +349,7 @@ async function notifySegmentComplete() {
     const resp = await fetch('/api/segment_complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: currentLat, lng: currentLng }),
     });
     const data = await resp.json();
     handleServerResponse(data);
@@ -356,6 +378,7 @@ if ('geolocation' in navigator) {
         mapHasFitBounds = true;
       }
       checkAutoAdvance();
+      reportPositionForStation();
     },
     (err) => {
       gpsStatusEl.innerHTML = `<span class="dot bad"></span>定位失敗：${err.message}`;
@@ -488,6 +511,13 @@ function handleServerResponse(data) {
 
   navStatusEl.classList.toggle('active', AUTO_ADVANCE_STAGES.includes(currentStage));
 
+  // 台北車站指標導引：後端帶 guide_target 就開鏡頭，離開這個階段就關掉
+  if (currentStage === 'station_guidance' && data.guide_target) {
+    startGuideCamera(data.guide_target);
+  } else {
+    stopGuideCamera();
+  }
+
   if (currentStage === 'idle') {
     currentWalkSteps = [];
     currentStepIndex = 0;
@@ -515,10 +545,107 @@ resetBtn.addEventListener('click', async () => {
   currentStepIndex = 0;
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   navStatusEl.classList.remove('active');
+  stopGuideCamera();
   logEl.innerHTML = '';
   addBubble('已重新開始對話', 'system');
   speak('已重新開始對話');
 });
+
+// ===== 台北車站：GPS 進入地理圍欄時通知後端（後端判斷要不要切換成指標導引）=====
+let lastPositionReportAt = 0;
+async function reportPositionForStation() {
+  if (currentStage !== 'navigating_transit_before') return;
+  const now = Date.now();
+  if (now - lastPositionReportAt < 5000) return;
+  lastPositionReportAt = now;
+  try {
+    const resp = await fetch('/api/position', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: currentLat, lng: currentLng }),
+    });
+    const data = await resp.json();
+    if (data.changed) handleServerResponse(data);
+  } catch (e) {}
+}
+
+// ===== 台北車站指標導引：鏡頭影格 → /api/sign_frame → sign_detector =====
+const guidePanel = document.getElementById('guidePanel');
+const guideVideo = document.getElementById('guideVideo');
+const guideInfo = document.getElementById('guideInfo');
+const GUIDE_INTERVAL_MS = 1000;   // 每秒送一張，OCR 較慢，太快只會排隊
+let guideStream = null;
+let guideRunning = false;
+let lastGuideError = '';
+
+async function startGuideCamera(target) {
+  guideInfo.textContent = `📷 正在找「${target}」的指標`;
+  guidePanel.classList.add('active');
+  if (guideRunning) return;
+  try {
+    guideStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }, audio: false,
+    });
+    guideVideo.srcObject = guideStream;
+    await guideVideo.play();
+    guideRunning = true;
+    guideLoop();
+  } catch (e) {
+    const msg = e.name === 'NotAllowedError' ? '請允許相機權限' : e.message;
+    addBubble(`（無法開啟相機：${msg}）`, 'system');
+    speak('無法開啟相機，請允許相機權限，或走到指標旁時直接說「到了」');
+  }
+}
+
+function stopGuideCamera() {
+  guideRunning = false;
+  guidePanel.classList.remove('active');
+  if (guideStream) guideStream.getTracks().forEach((t) => t.stop());
+  guideStream = null;
+}
+
+function grabGuideFrame() {
+  const v = guideVideo;
+  if (!v || !v.videoWidth) return null;
+  const scale = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(v.videoWidth * scale);
+  c.height = Math.round(v.videoHeight * scale);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+async function guideLoop() {
+  while (guideRunning) {
+    const started = Date.now();
+    const frame = grabGuideFrame();
+    if (frame) {
+      try {
+        const resp = await fetch('/api/sign_frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: frame, lat: currentLat, lng: currentLng }),
+        });
+        const data = await resp.json();
+        if (!data.active) { stopGuideCamera(); break; }
+        guideInfo.textContent = data.found && data.direction
+          ? `📷 「${data.guide_target}」：${data.direction}`
+          : `📷 正在找「${data.guide_target}」的指標`;
+        if (data.error && data.error !== lastGuideError) {
+          lastGuideError = data.error;
+          addBubble(`（指標辨識：${data.error}）`, 'system');
+          speak('指標辨識服務沒有回應，走到指標旁時可以直接說「到了」');
+        }
+        if (data.speak && data.text) {
+          addBubble(data.text, 'system');
+          speak(data.text);
+        }
+      } catch (e) {}
+    }
+    const wait = GUIDE_INTERVAL_MS - (Date.now() - started);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  }
+}
 </script>
 
 </body>

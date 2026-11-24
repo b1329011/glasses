@@ -28,11 +28,12 @@ Flask後端伺服器 —— 把 main.py 的CLI邏輯改成網頁可呼叫的API
 
 from flask import Flask, request, jsonify
 
-from modules import nlu, places, routing, transit
+from modules import nlu, places, routing, transit, station_guide, sign_client
 
 app = Flask(__name__)
 
 CONFIRM_START_KEYWORDS = ["開始", "好", "好的", "好啊", "可以", "對", "走吧", "出發", "ok", "OK"]
+CANCEL_NAV_KEYWORDS = ["取消", "停止", "不要導航了"]
 
 # 單一使用者的對話狀態（demo規模；正式多人系統要換成per-user session）
 SESSION = {
@@ -41,6 +42,9 @@ SESSION = {
     "chosen_place": None,
     "route_session": None,
     "current_route": None,
+    "legs": [],          # 所有搭乘段（有轉車時 >1 段）
+    "leg_index": 0,      # 目前進行到第幾段
+    "guide": None,       # 台北車站指標導引 session（station_guide.SignGuidanceSession）
 }
 
 
@@ -50,6 +54,9 @@ def _reset_session():
     SESSION["chosen_place"] = None
     SESSION["route_session"] = None
     SESSION["current_route"] = None
+    SESSION["legs"] = []
+    SESSION["leg_index"] = 0
+    SESSION["guide"] = None
 
 
 def _start_route_session(chosen_place: dict, lat: float, lng: float) -> str:
@@ -74,6 +81,10 @@ def _reply(text: str, extra: dict = None) -> "flask.Response":
     extra 可以額外帶 walk_steps（含座標的步驟清單，給前端做地圖畫線+GPS自動觸發用）
     """
     payload = {"reply": text, "stage": SESSION["stage"]}
+    guide = SESSION.get("guide")
+    if SESSION["stage"] == "station_guidance" and guide and not guide.done:
+        # 前端看到 guide_target 就開鏡頭，持續把影格送到 /api/sign_frame
+        payload["guide_target"] = guide.current_target
     chosen = SESSION.get("chosen_place")
     if chosen:
         payload["dest_lat"] = chosen.get("lat")
@@ -83,21 +94,115 @@ def _reply(text: str, extra: dict = None) -> "flask.Response":
     return jsonify(payload)
 
 
-def _transit_boarding_prompt() -> str:
-    route = SESSION["current_route"]
-    SESSION["stage"] = "navigating_transit_wait_board"
-    line_name = route.get("line_name", "")
-    headsign = route.get("headsign", "")
-    mode = route.get("mode", "大眾運輸")
-    wait_min = route.get("wait_min")
+def _current_leg() -> dict:
+    legs = SESSION.get("legs") or []
+    i = SESSION.get("leg_index", 0)
+    if 0 <= i < len(legs):
+        return legs[i]
+    return SESSION["current_route"] or {}
 
-    text = f"到了{route.get('departure_stop', '站牌')}，請確認搭乘{mode}{line_name}"
+
+def _transit_boarding_prompt(prefix: str = "") -> str:
+    leg = _current_leg()
+    SESSION["stage"] = "navigating_transit_wait_board"
+    line_name = leg.get("line_name", "")
+    headsign = leg.get("headsign", "")
+    mode = leg.get("mode", "大眾運輸")
+    wait_min = leg.get("wait_min")
+
+    text = f"{prefix}到了{leg.get('departure_stop', '站牌')}，請確認搭乘{mode}{line_name}"
     if headsign:
         text += f"，往{headsign}方向"
     if wait_min is not None:
         text += f"，預計{wait_min}分鐘後進站"
     text += "。上車後請說「上車了」"
     return text
+
+
+# ============================================================
+# 台北車站指標導引（呼叫 sign_detector）
+# ============================================================
+def _start_guidance(plan: list, purpose: str, reason: str, prefix: str = "") -> tuple:
+    """
+    進入 station_guidance 階段。purpose：
+      board          → 找月台，走完直接進「等車確認」
+      exit_transfer  → 出站去轉乘（例如捷運轉公車），走完接著走到下一段的上車處
+      exit           → 最後一段下車出站，走完接著走到目的地
+    """
+    guide = station_guide.SignGuidanceSession(plan, purpose, reason=reason)
+    SESSION["guide"] = guide
+    if guide.done:
+        return _finish_guidance(prefix)
+    SESSION["stage"] = "station_guidance"
+    return prefix + guide.intro_text(), []
+
+
+def _finish_guidance(prefix: str = "") -> tuple:
+    guide = SESSION.get("guide")
+    purpose = guide.purpose if guide else "board"
+    SESSION["guide"] = None
+    if purpose == "board":
+        return _transit_boarding_prompt(prefix=prefix + "已到達月台。"), []
+    if purpose == "exit_transfer":
+        return _proceed_to_current_leg(prefix=prefix + "已經出站。")
+    return _walk_to_destination(prefix=prefix + "已經出站。")
+
+
+def _arrive_at_boarding_stop(lat=None, lng=None, prefix: str = "") -> tuple:
+    """走到（或轉乘到）這一段的上車處：台北車站軌道運輸就先用指標帶到月台，否則直接等車確認。"""
+    leg = _current_leg()
+    if station_guide.needs_boarding_guidance(leg, lat, lng):
+        plan = station_guide.plan_for_boarding(leg)
+        return _start_guidance(plan, "board", reason=f"已到達台北車站，要搭{leg.get('mode', '')}{leg.get('line_name', '')}",
+                               prefix=prefix)
+    return _transit_boarding_prompt(prefix=prefix), []
+
+
+def _proceed_to_current_leg(prefix: str = "", lat=None, lng=None) -> tuple:
+    """開始目前這一段：有上車前步行就先走路（GPS 自動推進），沒有就直接到上車處。"""
+    leg = _current_leg()
+    steps_before = leg.get("steps_before") or []
+    if steps_before:
+        SESSION["stage"] = "navigating_transit_before"
+        return f"{prefix}先走到{leg.get('departure_stop')}。{steps_before[0]['voice_text']}", steps_before
+    return _arrive_at_boarding_stop(lat, lng, prefix=prefix)
+
+
+def _walk_to_destination(prefix: str = "") -> tuple:
+    steps_after = SESSION["current_route"].get("steps_after", [])
+    if steps_after:
+        SESSION["stage"] = "navigating_transit_after"
+        lead = "繼續走向目的地" if prefix else "下車後繼續走向目的地"
+        return f"{prefix}{lead}。{steps_after[0]['voice_text']}", steps_after
+    _reset_session()
+    return f"{prefix}已到達目的地附近，導航結束", []
+
+
+def _after_alighting() -> tuple:
+    """使用者說「下車了」：判斷要轉車、出站導引，還是直接走向目的地。"""
+    leg = _current_leg()
+    legs = SESSION.get("legs") or []
+    next_index = SESSION.get("leg_index", 0) + 1
+
+    if next_index < len(legs):
+        next_leg = legs[next_index]
+        SESSION["leg_index"] = next_index
+        prefix = (f"好的，接下來在{leg.get('arrival_stop', '這一站')}轉乘"
+                  f"{next_leg.get('mode', '')}{next_leg.get('line_name', '')}。")
+        if station_guide.needs_boarding_guidance(next_leg):
+            # 台北車站站內轉乘：直接用指標帶到下一條線的月台
+            plan = station_guide.plan_for_boarding(next_leg)
+            return _start_guidance(plan, "board", reason="在台北車站轉乘", prefix=prefix)
+        if station_guide.needs_exit_guidance(leg):
+            # 台北車站下捷運/火車，要出站轉公車
+            return _start_guidance(station_guide.plan_for_exit(), "exit_transfer",
+                                   reason="在台北車站下車，要先出站轉乘", prefix=prefix)
+        return _proceed_to_current_leg(prefix=prefix)
+
+    if station_guide.needs_exit_guidance(leg):
+        return _start_guidance(station_guide.plan_for_exit(), "exit",
+                               reason="在台北車站下車，要出站")
+    return _walk_to_destination()
 
 
 def _begin_navigation() -> tuple:
@@ -121,14 +226,11 @@ def _begin_navigation() -> tuple:
             reply = "好的，開始導航"
         return reply, steps
 
-    if route["mode"] in ("公車", "捷運") and route.get("departure_stop"):
-        SESSION["stage"] = "navigating_transit_before"
-        steps_before = route.get("steps_before", [])
-        if steps_before:
-            reply = f"好的，開始導航。先走到{route.get('departure_stop')}。{steps_before[0]['voice_text']}"
-            return reply, steps_before
-        reply = _transit_boarding_prompt()
-        return reply, []
+    if route["mode"] in ("公車", "捷運", "火車", "高鐵") and route.get("departure_stop"):
+        SESSION["legs"] = routing.get_transit_legs(route)
+        SESSION["leg_index"] = 0
+        reply, steps = _proceed_to_current_leg(prefix="好的，開始導航。")
+        return reply, steps
 
     _reset_session()
     return "這條路線目前還沒有詳細的逐步導航資料，建議改用其他交通方式", []
@@ -222,7 +324,7 @@ def api_command():
         "navigating_transit_before",
         "navigating_transit_after",
     ):
-        if any(kw in text for kw in ["取消", "停止", "不要導航了"]):
+        if any(kw in text for kw in CANCEL_NAV_KEYWORDS):
             _reset_session()
             return _reply("好的，已取消導航")
         return _reply("目前導航進行中，如果要取消請說「取消」")
@@ -230,14 +332,14 @@ def api_command():
     # === 階段：等待使用者確認上車（這個環節維持語音確認，因為系統
     #     沒辦法單靠手機GPS準確判斷「你是不是真的上車了」）===
     if stage == "navigating_transit_wait_board":
-        if any(kw in text for kw in ["取消", "停止", "不要導航了"]):
+        if any(kw in text for kw in CANCEL_NAV_KEYWORDS):
             _reset_session()
             return _reply("好的，已取消導航")
 
         if any(kw in text for kw in ["上車了", "上車", "已經上車"]):
-            route = SESSION["current_route"]
-            stop_count = route.get("stop_count")
-            arrival_stop = route.get("arrival_stop", "目的地站")
+            leg = _current_leg()
+            stop_count = leg.get("stop_count")
+            arrival_stop = leg.get("arrival_stop", "目的地站")
             SESSION["stage"] = "navigating_transit_riding"
             if stop_count:
                 reply = f"好的，坐{stop_count}站，到{arrival_stop}要下車。到站後請說「下車了」"
@@ -249,20 +351,34 @@ def api_command():
 
     # === 階段：搭乘中，等待使用者確認下車 ===
     if stage == "navigating_transit_riding":
-        if any(kw in text for kw in ["取消", "停止", "不要導航了"]):
+        if any(kw in text for kw in CANCEL_NAV_KEYWORDS):
             _reset_session()
             return _reply("好的，已取消導航")
 
         if any(kw in text for kw in ["下車了", "下車", "已經下車", "到了"]):
-            steps_after = SESSION["current_route"].get("steps_after", [])
-            if steps_after:
-                SESSION["stage"] = "navigating_transit_after"
-                reply = f"下車後繼續走向目的地。{steps_after[0]['voice_text']}"
-                return _reply(reply, extra={"walk_steps": steps_after})
-            _reset_session()
-            return _reply("已到達目的地附近，導航結束")
+            reply, steps = _after_alighting()
+            return _reply(reply, extra={"walk_steps": steps} if steps else None)
 
         return _reply("請在下車後告訴我「下車了」，或說「取消」結束導航")
+
+    # === 階段：台北車站站內指標導引（鏡頭影格由前端送到 /api/sign_frame）===
+    if stage == "station_guidance":
+        guide = SESSION["guide"]
+        if any(kw in text for kw in CANCEL_NAV_KEYWORDS):
+            _reset_session()
+            return _reply("好的，已取消導航")
+
+        if any(kw in text for kw in station_guide.ADVANCE_KEYWORDS):
+            msg = guide.advance()
+            if guide.done:
+                reply, steps = _finish_guidance()
+                return _reply(reply, extra={"walk_steps": steps} if steps else None)
+            return _reply(msg)
+
+        if any(kw in text for kw in station_guide.REPEAT_KEYWORDS):
+            return _reply(guide.repeat_text())
+
+        return _reply(f"正在用指標牌帶你找「{guide.current_target}」，走到之後請說「到了」，或說「取消」結束導航")
 
     _reset_session()
     return _reply("系統狀態異常，已重置，請重新導航")
@@ -275,6 +391,7 @@ def api_segment_complete():
     不需要使用者講任何話——這是這次修正的核心：路段推進交給真實GPS距離判斷，
     不再依賴「使用者有沒有開口說話」這種不精確的替代方案。
     """
+    data = request.get_json(force=True, silent=True) or {}
     stage = SESSION["stage"]
 
     if stage == "navigating_walk":
@@ -282,14 +399,63 @@ def api_segment_complete():
         return _reply("已到達目的地附近，導航結束")
 
     if stage == "navigating_transit_before":
-        reply = _transit_boarding_prompt()
-        return _reply(reply)
+        reply, steps = _arrive_at_boarding_stop(data.get("lat"), data.get("lng"))
+        return _reply(reply, extra={"walk_steps": steps} if steps else None)
 
     if stage == "navigating_transit_after":
         _reset_session()
         return _reply("已到達目的地附近，導航結束")
 
     return _reply("")
+
+
+@app.route("/api/position", methods=["POST"])
+def api_position():
+    """
+    前端在「走向上車處」時定期回報 GPS。一進入台北車站地理圍欄、而且這一段要在台北車站
+    搭捷運/火車/高鐵，就不等走完 GPS 路段（站內 GPS 很不準），直接切換成指標導引。
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    lat, lng = data.get("lat"), data.get("lng")
+    leg = _current_leg()
+    if (SESSION["stage"] == "navigating_transit_before"
+            and leg.get("mode") in station_guide.RAIL_MODES
+            and station_guide.is_taipei_main_name(leg.get("departure_stop"))
+            and station_guide.in_taipei_main_geofence(lat, lng)):
+        reply, _ = _arrive_at_boarding_stop(lat, lng)
+        payload = _reply(reply).get_json()
+        payload["changed"] = True
+        return jsonify(payload)
+    return jsonify({"changed": False, "stage": SESSION["stage"]})
+
+
+@app.route("/api/sign_frame", methods=["POST"])
+def api_sign_frame():
+    """
+    台北車站指標導引：前端每隔一段時間送一張鏡頭影格，這裡帶上「目前要找的指標」
+    轉送給 sign_detector，再經過穩定化（連續一致才播報）後回傳要不要講話。
+    """
+    guide = SESSION.get("guide")
+    if SESSION["stage"] != "station_guidance" or guide is None or guide.done:
+        return jsonify({"active": False, "stage": SESSION["stage"]})
+
+    data = request.get_json(force=True, silent=True) or {}
+    image_b64 = data.get("image_base64") or ""
+    if not image_b64:
+        return jsonify({"active": True, "speak": False, "error": "沒有收到影像", "stage": SESSION["stage"]})
+
+    target = guide.current_target
+    result = sign_client.navigate(image_b64, target)
+    out = guide.process_result(result)
+    out.update({
+        "active": True,
+        "stage": SESSION["stage"],
+        "guide_target": target,
+        "sentence": result.get("sentence") or result.get("message"),
+        "matched_box": result.get("matched_box"),
+        "arrow_box": result.get("arrow_box"),
+    })
+    return jsonify(out)
 
 
 @app.route("/api/reset", methods=["POST"])
