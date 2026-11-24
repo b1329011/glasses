@@ -22,7 +22,11 @@ Agent C 語音導航 API（FastAPI router）
     POST /segment_complete  前端 GPS 判斷走完一段路
     POST /position          走向上車處時回報 GPS（進入台北車站範圍自動切換指標導引）
     POST /sign_frame        台北車站指標導引的鏡頭影格
+    POST /locate_frame      台北車站室內定位的鏡頭影格（讀招牌 → 報位置、附近店家、出口）
     POST /reset             強制重來
+
+台北車站室內定位（「我在哪裡」「附近有什麼」「找人幫忙」）跟導航流程分開：
+任何階段都能說，不會打斷正在進行的導航。
 """
 
 import os
@@ -38,7 +42,7 @@ if AGENT_C_DIR not in sys.path:
 load_dotenv(os.path.join(AGENT_C_DIR, ".env"))
 
 
-from modules import nlu, places, routing, transit, station_guide, sign_client
+from modules import nlu, places, routing, transit, station_guide, sign_client, station_locator
 
 router = APIRouter(tags=["Agent C 語音導航"])
 
@@ -56,6 +60,13 @@ SESSION = {
     "leg_index": 0,      # 目前進行到第幾段
     "guide": None,       # 台北車站指標導引 session（station_guide.SignGuidanceSession）
 }
+
+# 台北車站室內定位：跟導航狀態分開，取消導航不會清掉「最後確認的位置」
+LOCATE = {
+    "session": None,     # station_locator.LocateSession（掃描中）
+    "last": None,        # 最後一次確認的位置 describe() 結果
+}
+STOP_LOCATE_KEYWORDS = ["不用找了", "停止找", "不用了", "關掉鏡頭"]
 
 
 def _reset_session():
@@ -91,6 +102,8 @@ def _reply(text: str, extra: dict = None) -> dict:
     extra 可以額外帶 walk_steps（含座標的步驟清單，給前端做地圖畫線+GPS自動觸發用）
     """
     payload = {"reply": text, "stage": SESSION["stage"]}
+    if LOCATE["session"] is not None and not LOCATE["session"].done:
+        payload["locate"] = True   # 前端看到就開鏡頭送 /locate_frame
     guide = SESSION.get("guide")
     if SESSION["stage"] == "station_guidance" and guide and not guide.done:
         # 前端看到 guide_target 就開鏡頭，持續把影格送到 /api/sign_frame
@@ -144,7 +157,7 @@ def _start_guidance(plan: list, purpose: str, reason: str, prefix: str = "") -> 
     if guide.done:
         return _finish_guidance(prefix)
     SESSION["stage"] = "station_guidance"
-    return prefix + guide.intro_text(), []
+    return prefix + guide.intro_text() + "。想知道自己在哪、附近有什麼，可以說「我在哪裡」", []
 
 
 def _finish_guidance(prefix: str = "") -> tuple:
@@ -246,6 +259,40 @@ def _begin_navigation() -> tuple:
     return "這條路線目前還沒有詳細的逐步導航資料，建議改用其他交通方式", []
 
 
+def _help_destination():
+    """找人幫忙時要說「想去哪」：依目前導航進度挑最具體的目標。"""
+    guide = SESSION.get("guide")
+    if SESSION["stage"] == "station_guidance" and guide and not guide.done:
+        leg = _current_leg()
+        if guide.purpose == "board" and leg.get("line_name"):
+            head = f"往{leg['headsign']}方向" if leg.get("headsign") else ""
+            return f"搭{leg.get('mode', '')}{leg['line_name']}{head}的月台"
+        return "最近的出口"
+    if SESSION["stage"] in ("navigating_transit_before", "navigating_transit_wait_board"):
+        leg = _current_leg()
+        return f"{leg.get('departure_stop', '')}搭{leg.get('mode', '')}{leg.get('line_name', '')}"
+    chosen = SESSION.get("chosen_place")
+    return chosen.get("name") if chosen else None
+
+
+def _handle_locate_commands(text: str):
+    """「我在哪裡」「找人幫忙」「不用找了」；不是這類指令就回傳 None 交給導航流程。"""
+    if any(k in text for k in station_locator.HELP_KEYWORDS):
+        last = LOCATE["last"]
+        msg = station_locator.help_message(last["short"] if last else None, _help_destination())
+        return _reply(msg["speak"], extra={"help_card": msg["card"]})
+
+    if any(k in text for k in station_locator.LOCATE_KEYWORDS):
+        LOCATE["session"] = station_locator.LocateSession()
+        return _reply(LOCATE["session"].intro_text())
+
+    if LOCATE["session"] is not None and not LOCATE["session"].done and \
+            any(k in text for k in STOP_LOCATE_KEYWORDS):
+        LOCATE["session"] = None
+        return _reply("好的，不找了")
+    return None
+
+
 @router.post("/command")
 def api_command(data: dict = Body(default={})):
     text = (data.get("text") or "").strip()
@@ -254,6 +301,11 @@ def api_command(data: dict = Body(default={})):
 
     if not text:
         return _reply("沒有收到語音內容，請再說一次")
+
+    # === 台北車站室內定位 / 找人幫忙：任何階段都能用，不影響導航進度 ===
+    located = _handle_locate_commands(text)
+    if located is not None:
+        return located
 
     stage = SESSION["stage"]
 
@@ -467,8 +519,40 @@ def api_sign_frame(data: dict = Body(default={})):
     return out
 
 
+@router.post("/locate_frame")
+def api_locate_frame(data: dict = Body(default={})):
+    """
+    台北車站室內定位：前端送一張影格 → OCR 讀招牌/出口編號 → 比對店家資料 →
+    連續幾張都指向同一個地方才播報，播完就結束（active=False，前端關鏡頭）。
+    """
+    session = LOCATE["session"]
+    if session is None or session.done:
+        return {"active": False, "stage": SESSION["stage"]}
+    data = data or {}
+    image_b64 = data.get("image_base64") or ""
+    if not image_b64:
+        return {"active": True, "speak": False, "error": "沒有收到影像", "stage": SESSION["stage"]}
+
+    ocr = sign_client.read_texts(image_b64)
+    out = session.process(ocr.get("texts", []))
+    if out["done"]:
+        LOCATE["last"] = out["result"]
+        LOCATE["session"] = None
+    return {
+        "active": not out["done"],
+        "speak": out["speak"],
+        "text": out["text"],
+        "clues": [{"kind": c["kind"], "key": c["key"]} for c in out["clues"]],
+        "texts_read": [t.get("text") for t in ocr.get("texts", [])][:10],
+        "error": ocr.get("error"),
+        "stage": SESSION["stage"],
+    }
+
+
 @router.post("/reset")
 def api_reset():
     """提供手機端一個「強制重來」的按鈕用，萬一卡在某個階段出不去"""
     _reset_session()
+    LOCATE["session"] = None
+    LOCATE["last"] = None
     return _reply("已重置")

@@ -34,6 +34,7 @@ export const navApi = {
   segmentComplete: (lat, lng) => navReq('/segment_complete', { lat, lng }),
   position: (lat, lng) => navReq('/position', { lat, lng }),
   signFrame: (image_base64, lat, lng) => navReq('/sign_frame', { image_base64, lat, lng }),
+  locateFrame: (image_base64, lat, lng) => navReq('/locate_frame', { image_base64, lat, lng }),
   reset: () => navReq('/reset'),
 }
 

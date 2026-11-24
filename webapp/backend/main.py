@@ -1171,6 +1171,13 @@ def navigate(payload: dict = Body(...)):
 # ============================================================
 # agent_c_navigation/nav_api.py 是 FastAPI router，掛在 /api/agent-c/*；
 # 台北車站指標導引要辨識時，直接呼叫上面的 navigate()，不經過 HTTP。
+def _ocr_texts_for_agent_c(payload: dict) -> list:
+    """台北車站室內定位用：整張影格 OCR，只回傳文字與信心值（不畫圖，求快）。"""
+    img = _decode_image(payload)
+    return [{"text": str(text), "conf": round(float(conf), 3)}
+            for _bbox, text, conf in _ocr_readtext(img, max_size=1024, min_size=10)]
+
+
 def _mount_agent_c():
     import sys
     agent_c_dir = config.PROJECT_ROOT / "agent_c_navigation"
@@ -1186,6 +1193,7 @@ def _mount_agent_c():
         print(f"[Agent C] 載入失敗（缺套件？請 pip install -r requirements.txt）：{e}")
         return
     sign_client.set_local_navigator(navigate)
+    sign_client.set_local_ocr(_ocr_texts_for_agent_c)
     app.include_router(agent_c_router, prefix="/api/agent-c")
     print("[Agent C] 語音導航 API 已掛載：/api/agent-c/*")
 

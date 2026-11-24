@@ -122,6 +122,55 @@ def navigate(image_base64: str, target: str, **params) -> dict:
         return {"found": False, "target": target, "error": f"無法連線指標辨識服務（{SIGN_DETECTOR_URL}）：{e}"}
 
 
+# ============================================================
+# 文字辨識（台北車站室內定位：讀店家招牌、出口編號）
+# ============================================================
+_local_ocr = None
+
+
+def set_local_ocr(fn) -> None:
+    """合併後端用：fn(payload{image_base64}) → [{"text","conf"}, ...]"""
+    global _local_ocr
+    _local_ocr = fn
+
+
+def read_texts(image_base64: str) -> dict:
+    """
+    讀出畫面裡的文字。
+    Returns: {"texts": [{"text", "conf"}, ...]}；失敗時 {"texts": [], "error": "..."}
+    """
+    if USE_MOCK:
+        return {"texts": _mock_texts()}
+    payload = {"image_base64": image_base64}
+    if _local_ocr is not None:
+        try:
+            return {"texts": list(_local_ocr(payload))}
+        except Exception as e:  # noqa: BLE001
+            return {"texts": [], "error": f"文字辨識失敗：{getattr(e, 'detail', None) or e}"}
+    try:
+        resp = requests.post(f"{SIGN_DETECTOR_URL}/api/ocr", json={**payload, "min_conf": 0.3}, timeout=15)
+        if not resp.ok:
+            return {"texts": [], "error": f"HTTP {resp.status_code}"}
+        return {"texts": [{"text": t["text"], "conf": t["conf"]} for t in resp.json().get("texts", [])]}
+    except requests.RequestException as e:
+        return {"texts": [], "error": f"無法連線文字辨識服務（{SIGN_DETECTOR_URL}）：{e}"}
+
+
+def _mock_texts() -> list:
+    """模擬模式：偶爾「看到」資料裡某家店的招牌，連續幾張會傾向同一家（才能測到穩定確認）。"""
+    try:
+        from modules import station_locator
+        shops = [s["name"] for s in station_locator.load_db()["shops"]]
+    except Exception:  # noqa: BLE001
+        shops = ["新光三越"]
+    if random.random() < 0.35:
+        return []
+    _mock_texts.pick = getattr(_mock_texts, "pick", None) or random.choice(shops)
+    if random.random() < 0.15:
+        _mock_texts.pick = random.choice(shops)
+    return [{"text": _mock_texts.pick, "conf": 0.9}]
+
+
 if __name__ == "__main__":
     import base64
     import sys

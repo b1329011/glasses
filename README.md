@@ -31,9 +31,33 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 
 程式位置：
 - `agent_c_navigation/modules/station_guide.py`：判斷是否在台北車站、規劃要找的指標、穩定播報
+- `agent_c_navigation/modules/station_locator.py`：讀招牌定位、組「附近有什麼、靠近哪個出口」、求助卡
 - `agent_c_navigation/modules/sign_client.py`：呼叫指標辨識（合併後端直接呼叫函式；單獨啟動時走 HTTP）
 - `agent_c_navigation/modules/routing.py`：`transit_legs` 支援多段搭乘（轉車）
 - `agent_c_navigation/nav_api.py`：導航 API（`station_guidance` 階段、`/sign_frame`、`/position`），掛在合併後端的 `/api/agent-c`
+
+## 台北車站室內定位：我在哪裡、附近有什麼
+
+跟教授討論後，室內以台北車站為主，不做全程逐步導引，改成告訴使用者「大概在哪、附近有什麼、靠近哪個出口」，
+讓使用者自己判斷怎麼走，或找人幫忙。
+
+- **我在哪裡**（語音說「我在哪裡／附近有什麼／最近的出口」，或按 📍 按鈕）：開鏡頭，OCR 讀店家招牌和指標上的出口編號（Y13、Z4…），
+  比對 `agent_c_navigation/data/taipei_main_station.json`，連續 2 張影格指向同一處才播報，播完自動關鏡頭。
+  例：「你在站前地下街（Z區），新光三越附近，靠近Z2出口（南陽街…）、Z4出口（館前路…），附近還有國立台灣博物館。」
+- **找人幫忙**（說「找人幫忙」或按 🙋 按鈕）：螢幕顯示大字求助卡，內容帶入最後確認的位置和要去的地方（例如正在找的月台），可以拿給路人或站務人員看。
+- 任何時候都能用，不會打斷正在進行的導航；原本的「依路線找指標」（淡水信義線 → 往淡水、轉乘、找出口）保留。
+
+### 店家資料（需要實地補齊）
+
+`agent_c_navigation/data/taipei_main_station.json`：每筆都有 `source`（資料來源）和 `verified`。
+目前有 5 區、24 個出口（Z、K 區出口描述完整，Y、M 區只有少數）、8 個店家/地標，大多是公開資料查得到的地標。
+台北地下街、站前地下街官網的店家列表沒辦法自動抓，**Y 區的店家和出口要實地蒐集**：
+
+```json
+{"name": "招牌上的字", "aliases": ["英文或其他寫法"], "zone": "Y", "near_exits": ["Y13", "Y15"], "kind": "動漫", "verified": true, "source": "2026-12 實地"}
+```
+
+檔案存檔後後端會自動重讀，不用重開。
 
 ## 執行
 
