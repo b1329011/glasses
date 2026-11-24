@@ -45,9 +45,10 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 
 | 頁面 | 功能 |
 |---|---|
-| ① 標註 / ② 訓練 / ③ 辨識測試 | 標註照片、訓練 YOLO、測試辨識 |
+| 🗣️ 語音導航（首頁） | 語音指令、GPS 地圖、逐步導航、台北車站指標導引 |
 | 🧭 指標導航 | 手動輸入目標，對準指標牌報方向 |
-| 🗣️ 語音導航 | 語音指令、GPS 地圖、逐步導航、台北車站指標導引 |
+
+標註、訓練、辨識測試頁已從前端移除（後端的訓練 API 還在；要再訓練可用 `sign-detection/train.py`）。
 
 ```bash
 # 終端機 1：後端
@@ -58,7 +59,7 @@ uvicorn main:app --port 8000
 # 終端機 2：前端
 cd webapp/frontend
 npm install
-npm run dev        # 手機開 https://電腦IP:5173（手機預設進語音導航，電腦預設進標註）
+npm run dev        # 手機開 https://電腦IP:5173
 ```
 
 Agent C 的金鑰（GEMINI_API_KEY、GOOGLE_MAPS_API_KEY、TDX_*）一樣放在 `agent_c_navigation/.env`，

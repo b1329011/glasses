@@ -5,6 +5,7 @@
  * 重用後端 /api/infer(箭頭，快) + /api/navigate(目標+方向，較慢)。
  */
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '../api.js'
 
 const video = ref(null)
@@ -159,6 +160,7 @@ onBeforeUnmount(stop)
   <div class="nav-screen">
     <!-- 上：輸入目的 -->
     <div class="top-bar">
+      <RouterLink to="/nav" class="back-btn" aria-label="回語音導航" @click="stop">←</RouterLink>
       <input v-model="target" class="target-input" placeholder="輸入目的，如：廁所、出口、淡水信義線"
              @keyup.enter="go" />
       <button class="go-btn" @click="go">🔍</button>
@@ -200,6 +202,10 @@ onBeforeUnmount(stop)
 .target-input {
   flex: 1; font-size: 18px; padding: 12px 14px; border-radius: 10px;
   background: #1e293b; color: #fff; border: 1px solid #334155;
+}
+.back-btn {
+  flex: none; width: 44px; height: 48px; display: grid; place-items: center;
+  font-size: 22px; color: #fff; text-decoration: none; border-radius: 10px; background: #1e293b;
 }
 .go-btn {
   flex: none; width: 50px; height: 48px; font-size: 20px; border-radius: 10px;

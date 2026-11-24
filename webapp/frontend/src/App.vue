@@ -8,11 +8,8 @@ import { RouterLink, RouterView } from 'vue-router'
     <header class="topbar">
       <div class="brand">🔎 視障導航眼鏡</div>
       <nav class="nav">
-        <RouterLink to="/annotate">① 標註</RouterLink>
-        <RouterLink to="/train">② 訓練</RouterLink>
-        <RouterLink to="/detect">③ 辨識測試</RouterLink>
-        <RouterLink to="/go">🧭 指標導航</RouterLink>
         <RouterLink to="/nav">🗣️ 語音導航</RouterLink>
+        <RouterLink to="/go">🧭 指標導航</RouterLink>
       </nav>
     </header>
     <main class="content">
