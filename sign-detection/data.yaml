@@ -1,0 +1,27 @@
+# 本檔由後端依資料庫類別自動產生，請勿手動編輯
+path: C:/Users/jinny/OneDrive/文件/sign_detector/sign-detection/dataset
+train: images/train
+val: images/train
+test: images/test
+names:
+  0: arrow_left
+  1: arrow_right
+  2: arrow_forward
+  3: turn_around
+  4: left_forward
+  5: right_forward
+  6: down
+  7: left_down
+  8: right_down
+  9: toilet
+  10: stairs
+  11: elevator
+  12: exit
+  13: emergency_exit
+  14: escalator
+  15: text
+  16: line
+  17: direction
+  18: high_speed_rail
+  19: train
+nc: 20
