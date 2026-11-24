@@ -37,18 +37,38 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 
 ## 執行
 
+前端已合成一個（`webapp/frontend`，Vue），後端還是兩個：
+
+| 頁面 | 功能 | 用到的後端 |
+|---|---|---|
+| ① 標註 / ② 訓練 / ③ 辨識測試 | 標註照片、訓練 YOLO、測試辨識 | sign_detector（8000） |
+| 🧭 指標導航 | 手動輸入目標，對準指標牌報方向 | sign_detector（8000） |
+| 🗣️ 語音導航 | 語音指令、GPS 地圖、逐步導航、台北車站指標導引 | Agent C（8080）→ sign_detector |
+
 ```bash
 # 1. 指標辨識服務（需要 ultralytics + OCR）
-cd webapp/backend
-pip install -r requirements.txt
+cd webapp/backend && pip install -r requirements.txt
 uvicorn main:app --port 8000
 
-# 2. 導航（另一個終端機）
+# 2. Agent C 導航（另一個終端機）
+cd agent_c_navigation && pip install -r requirements.txt
+python3 app.py
+
+# 3. 前端（另一個終端機）
+cd webapp/frontend && npm install
+npm run dev        # 手機開 https://電腦IP:5173，手機預設進「語音導航」，電腦預設進「標註」
+```
+
+Vite 把 `/api/agent-c/*` 代理到 Agent C（預設 `https://localhost:8080`，可用環境變數 `AGENT_C_URL` 改），
+其餘 `/api/*` 代理到 sign_detector（8000）。`agent_c_navigation/static_index.html` 是舊的單頁版，
+新前端已涵蓋它的所有功能。
+
+文字模擬版與轉乘示範：
+
+```bash
 cd agent_c_navigation
-pip install -r requirements.txt
-python3 app.py          # 手機版（https://電腦IP:8080），進到台北車站會自動開後鏡頭
-python3 main.py         # 文字模擬版
-python3 modules/transit_navigation.py transfer   # 直接跑「板南線→台北車站轉淡水信義線」示範
+python3 main.py
+python3 modules/transit_navigation.py transfer
 ```
 
 `agent_c_navigation/.env` 可設定：

@@ -16,6 +16,28 @@ async function req(path, options = {}) {
   return res.status === 204 ? null : res.json()
 }
 
+// --- Agent C 語音導航後端（Flask app.py）---
+// 走 /api/agent-c/*，Vite 代理到 Flask 並把前綴改回 /api（見 vite.config.js）
+const NAV_BASE = '/api/agent-c'
+
+async function navReq(path, body) {
+  const res = await fetch(NAV_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  })
+  if (!res.ok) throw new Error(`Agent C ${res.status}`)
+  return res.json()
+}
+
+export const navApi = {
+  command: (text, lat, lng) => navReq('/command', { text, lat, lng }),
+  segmentComplete: (lat, lng) => navReq('/segment_complete', { lat, lng }),
+  position: (lat, lng) => navReq('/position', { lat, lng }),
+  signFrame: (image_base64, lat, lng) => navReq('/sign_frame', { image_base64, lat, lng }),
+  reset: () => navReq('/reset'),
+}
+
 export const api = {
   // --- 類別 ---
   listClasses: () => req('/classes'),

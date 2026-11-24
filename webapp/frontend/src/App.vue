@@ -6,12 +6,13 @@ import { RouterLink, RouterView } from 'vue-router'
 <template>
   <div class="app">
     <header class="topbar">
-      <div class="brand">🔎 指標牌辨識操作介面</div>
+      <div class="brand">🔎 視障導航眼鏡</div>
       <nav class="nav">
         <RouterLink to="/annotate">① 標註</RouterLink>
         <RouterLink to="/train">② 訓練</RouterLink>
         <RouterLink to="/detect">③ 辨識測試</RouterLink>
-        <RouterLink to="/go">🧭 導航</RouterLink>
+        <RouterLink to="/go">🧭 指標導航</RouterLink>
+        <RouterLink to="/nav">🗣️ 語音導航</RouterLink>
       </nav>
     </header>
     <main class="content">
@@ -33,7 +34,7 @@ import { RouterLink, RouterView } from 'vue-router'
   z-index: 10;
 }
 .brand { font-weight: 700; font-size: 18px; }
-.nav { display: flex; gap: 8px; }
+.nav { display: flex; gap: 8px; flex-wrap: wrap; }
 .nav a {
   color: var(--muted);
   text-decoration: none;
