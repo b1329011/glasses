@@ -35,6 +35,8 @@ const guideActive = ref(false)    // 鏡頭區塊是否顯示（指標導引或�
 const guideInfo = ref('')
 const helpCard = ref('')          // 找人幫忙的大字卡內容
 let guideTarget = null            // 指標導引目前要找的指標（null = 沒在導引）
+// 羅盤：使用者面向（0=北，順時針）。地下鋼筋會干擾磁力計，所以只送「新鮮且精度可接受」的值
+let compass = { heading: null, at: 0 }
 let locating = false              // 室內定位掃描中
 const confirmReset = ref(false)
 
@@ -319,7 +321,33 @@ async function stopLocate() {
   try { await navApi.command('不用找了', lat, lng) } catch (_) {}
 }
 
-function locateBtn() { addBubble('我在哪裡', 'user'); sendCommand('我在哪裡') }
+// ===== 羅盤 =====
+function onOrientation(e) {
+  if (typeof e.webkitCompassHeading === 'number') {          // iOS
+    if (e.webkitCompassAccuracy == null || (e.webkitCompassAccuracy >= 0 && e.webkitCompassAccuracy <= 30)) {
+      compass = { heading: e.webkitCompassHeading, at: Date.now() }
+    }
+  } else if (e.absolute && typeof e.alpha === 'number') {    // Android（deviceorientationabsolute）
+    compass = { heading: (360 - e.alpha) % 360, at: Date.now() }
+  }
+}
+function startCompass() {
+  window.addEventListener('deviceorientationabsolute', onOrientation)
+  window.addEventListener('deviceorientation', onOrientation)
+}
+async function askCompassPermission() {
+  // iOS 13+ 要在使用者點擊時請求權限
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      await DeviceOrientationEvent.requestPermission()
+    }
+  } catch (_) {}
+}
+function currentHeading() {
+  return compass.heading != null && Date.now() - compass.at < 2000 ? Math.round(compass.heading) : null
+}
+
+function locateBtn() { askCompassPermission(); addBubble('我在哪裡', 'user'); sendCommand('我在哪裡') }
 function helpBtn() { addBubble('找人幫忙', 'user'); sendCommand('找人幫忙') }
 
 function grabFrame() {
@@ -359,7 +387,7 @@ function reportError(err) {
 }
 
 async function locateStep(frame) {
-  const d = await navApi.locateFrame(frame, lat, lng)
+  const d = await navApi.locateFrame(frame, lat, lng, currentHeading())
   reportError(d.error)
   if (d.speak && d.text) { addBubble(d.text, 'system'); speak(d.text) }
   if (!d.active) { locating = false; syncCamera() }
@@ -399,6 +427,7 @@ onMounted(() => {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map)
   startGps()
   setupSpeech()
+  startCompass()
 })
 
 onBeforeUnmount(() => {
@@ -407,6 +436,8 @@ onBeforeUnmount(() => {
   if (recognition) { try { recognition.abort() } catch (_) {} }
   window.speechSynthesis && window.speechSynthesis.cancel()
   if (map) map.remove()
+  window.removeEventListener('deviceorientationabsolute', onOrientation)
+  window.removeEventListener('deviceorientation', onOrientation)
 })
 </script>
 

@@ -47,17 +47,30 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 - **找人幫忙**（說「找人幫忙」或按 🙋 按鈕）：螢幕顯示大字求助卡，內容帶入最後確認的位置和要去的地方（例如正在找的月台），可以拿給路人或站務人員看。
 - 任何時候都能用，不會打斷正在進行的導航；原本的「依路線找指標」（淡水信義線 → 往淡水、轉乘、找出口）保留。
 
-### 店家資料（需要實地補齊）
+### 店家與出口資料
 
-`agent_c_navigation/data/taipei_main_station.json`：每筆都有 `source`（資料來源）和 `verified`。
-目前有 5 區、24 個出口（Z、K 區出口描述完整，Y、M 區只有少數）、8 個店家/地標，大多是公開資料查得到的地標。
-台北地下街、站前地下街官網的店家列表沒辦法自動抓，**Y 區的店家和出口要實地蒐集**：
+`agent_c_navigation/data/taipei_main_station.json`，主要來自 **OpenStreetMap**（© OpenStreetMap contributors，ODbL 授權，報告/展示需標示出處），
+再加上市場處、維基百科等公開資料：
 
-```json
-{"name": "招牌上的字", "aliases": ["英文或其他寫法"], "zone": "Y", "near_exits": ["Y13", "Y15"], "kind": "動漫", "verified": true, "source": "2026-12 實地"}
+- 66 個出口有座標（Y/Z/K/M/R，加上台北車站東西南北門；只差 Y22）
+- 130 個地下店家／地點（餐廳、便利商店、台鐵高鐵進出站口、詢問處…），各自有座標、所屬區域、最近出口
+- 台北地下街的服飾／百貨／電子／美食區
+
+有座標所以能說「M6 出口約 20 公尺，在你左前方」：方向用手機羅盤（Android 直接可用，iOS 按 📍 時會詢問權限）。
+**地下鋼筋會干擾羅盤**，只有讀數新鮮、精度可接受時才會說左右，否則只報距離。
+
+同名連鎖店（7-Eleven 4 家、國泰世華 ATM 5 家、吉豚屋 2 家…）只看到它時不會亂猜，會請使用者再對準旁邊別的招牌。
+
+更新資料：
+
+```bash
+cd agent_c_navigation
+python tools/osm_import.py --fetch   # 從 OpenStreetMap 抓最新（需要網路）
+python tools/osm_import.py           # 用已存的 data/osm_raw_taipei_main.json 重建
 ```
 
-檔案存檔後後端會自動重讀，不用重開。
+實地發現 OSM 沒有的店，可以直接在 JSON 的 `shops` 加（有座標最好，沒有就填 `near_exits`），或到 openstreetmap.org 補上再重新匯入。
+存檔後後端會自動重讀。
 
 ## 執行
 

@@ -1,88 +1,2868 @@
 {
-  "_說明": [
-    "台北車站室內定位用資料：鏡頭 OCR 讀到店家招牌或出口編號後，用這份資料推估使用者在哪一區、靠近哪些出口。",
-    "verified=true：有公開資料來源（source 欄位）；false：還沒確認，需要實地蒐集或核對。",
-    "新增店家：在 shops 加一筆，name 寫招牌上的字，aliases 放招牌可能的其他寫法（英文、簡稱），near_exits 填最近的出口編號（可以多個）。",
-    "出口編號規則：Y=台北地下街（市民大道下）、Z=站前地下街（忠孝西路下）、K=K區地下街（站前廣場下）、R=中山地下街、M=捷運台北車站。"
-  ],
-  "version": "2026-11-24",
-
-  "zones": {
-    "Y": {
-      "name": "台北地下街（Y區）",
-      "where": "市民大道一段下方，東端接台北車站，西端接捷運北門站，全長約825公尺",
-      "layout": "28個出入口，南北兩側各14個；由東（台北車站）往西（北門站）大致為服飾、百貨、資訊（電玩動漫模型）、美食等區；模型店大約集中在Y13到Y22之間；北門站端有數家盲人按摩",
-      "help_desk": "地下街服務台（位置待實地確認）",
-      "source": "臺北市市場處台北地下街介紹（tcma.gov.taipei）、Wikipedia Taipei City Mall、uptogo 台北地下街模型區整理、taiwanderers"
-    },
-    "Z": {
-      "name": "站前地下街（Z區）",
-      "where": "忠孝西路一段下方，東起南陽街（新光三越台北站前店前），西至重慶南路，全長約343公尺",
-      "layout": "共17間店鋪、6處廣場；Z2、Z4、Z6、Z8、Z10 在忠孝西路南側",
-      "help_desk": "待實地確認",
-      "source": "臺北市市場處站前地下街介紹（tcma.gov.taipei）、Wikipedia 站前地下街"
-    },
-    "K": {
-      "name": "K區地下街（東森廣場台北店）",
-      "where": "台北車站站前廣場地下，連接台鐵、高鐵南側各門",
-      "layout": "K1~K12出入口；2023年4月起由東森購物接手營運",
-      "help_desk": "待實地確認",
-      "source": "臺北市市場處K區地下街介紹（tcma.gov.taipei）、Wikipedia 台北車站K區地下街"
-    },
-    "R": {
-      "name": "中山地下街（R區）",
-      "where": "捷運台北車站到雙連站之間的地下，上方是心中山線形公園",
-      "layout": "書街、文創百貨、咖啡輕食",
-      "help_desk": "待實地確認",
-      "source": "台北捷運公司中山地下街簡介（metro.taipei）"
-    },
-    "M": {
-      "name": "捷運台北車站",
-      "where": "淡水信義線、板南線交會站",
-      "layout": "M1~M8出口",
-      "help_desk": "捷運站詢問處（站務人員可協助行動不便旅客）",
-      "source": "教育部捷運搭乘手冊（捷運車站旅客詢問處服務項目）"
-    }
+ "_說明": [
+  "台北車站室內定位用資料：鏡頭 OCR 讀到店家招牌或出口編號後，用這份資料推估使用者在哪一區、靠近哪些出口。",
+  "verified=true：有公開資料來源（source 欄位）；false：還沒確認，需要實地蒐集或核對。",
+  "新增店家：在 shops 加一筆，name 寫招牌上的字，aliases 放招牌可能的其他寫法（英文、簡稱），near_exits 填最近的出口編號（可以多個）。",
+  "出口編號規則：Y=台北地下街（市民大道下）、Z=站前地下街（忠孝西路下）、K=K區地下街（站前廣場下）、R=中山地下街、M=捷運台北車站。"
+ ],
+ "version": "2026-11-24",
+ "zones": {
+  "Y": {
+   "name": "台北地下街（Y區）",
+   "where": "市民大道一段下方，東端接台北車站，西端接捷運北門站，全長約825公尺",
+   "layout": "28個出入口，南北兩側各14個；由東（台北車站）往西（北門站）大致為服飾、百貨、資訊（電玩動漫模型）、美食等區；模型店大約集中在Y13到Y22之間；北門站端有數家盲人按摩",
+   "help_desk": "地下街服務台（位置待實地確認）",
+   "source": "臺北市市場處台北地下街介紹（tcma.gov.taipei）、Wikipedia Taipei City Mall、uptogo 台北地下街模型區整理、taiwanderers"
   },
-
-  "exits": [
-    {"id": "Y1", "zone": "Y", "side": "北側", "leads_to": "", "verified": false, "source": "Wikipedia 台北地下街（僅列出編號）"},
-    {"id": "Y2", "zone": "Y", "side": "南側", "leads_to": "與捷運M1出口共用通往地面的樓梯", "verified": true, "source": "Wikipedia 台北地下街"},
-    {"id": "Y22", "zone": "Y", "side": "", "leads_to": "靠近捷運北門站連通道", "verified": true, "source": "uptogo 台北地下街模型區整理"},
-
-    {"id": "Z1", "zone": "Z", "side": "北側", "leads_to": "承德路、桃園機場捷運、台北車站台鐵高鐵", "verified": true, "source": "Wikipedia 站前地下街"},
-    {"id": "Z2", "zone": "Z", "side": "南側", "leads_to": "南陽街、新光三越台北站前店、台北凱撒大飯店", "verified": true, "source": "Wikipedia 站前地下街"},
-    {"id": "Z4", "zone": "Z", "side": "南側", "leads_to": "館前路、新光三越台北站前店、國立台灣博物館", "verified": true, "source": "Wikipedia 站前地下街"},
-    {"id": "Z6", "zone": "Z", "side": "南側", "leads_to": "館前路、國立台灣博物館", "verified": true, "source": "Wikipedia 站前地下街"},
-    {"id": "Z8", "zone": "Z", "side": "南側", "leads_to": "懷寧街、台北廣場大廈", "verified": true, "source": "Wikipedia 站前地下街"},
-    {"id": "Z10", "zone": "Z", "side": "南側", "leads_to": "重慶南路、台北郵局、北門（承恩門）", "verified": true, "source": "Wikipedia 站前地下街"},
-
-    {"id": "K1", "zone": "K", "side": "", "leads_to": "北平西路；往台鐵、高鐵南一門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K2", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南一門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K3", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南二門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K4", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南二門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K5", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南三門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K6", "zone": "K", "side": "", "leads_to": "往台鐵、高鐵南三門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K7", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南三門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K8", "zone": "K", "side": "", "leads_to": "忠孝西路；往台鐵、高鐵南三門、西三門", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K9", "zone": "K", "side": "", "leads_to": "忠孝西路", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K10", "zone": "K", "side": "", "leads_to": "忠孝西路", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K11", "zone": "K", "side": "", "leads_to": "忠孝西路", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-    {"id": "K12", "zone": "K", "side": "", "leads_to": "忠孝西路", "verified": true, "source": "Wikipedia 台北車站K區地下街"},
-
-    {"id": "M1", "zone": "M", "side": "", "leads_to": "與台北地下街Y2共用通往地面的樓梯", "verified": true, "source": "Wikipedia 台北地下街"},
-    {"id": "M6", "zone": "M", "side": "", "leads_to": "只有樓梯，沒有電梯或手扶梯", "verified": true, "source": "uptogo 台灣青旅膠囊旅店交通整理"},
-    {"id": "M8", "zone": "M", "side": "", "leads_to": "", "verified": false, "source": "uptogo 台灣青旅膠囊旅店交通整理（只提到位置，通往哪裡待確認）"}
-  ],
-
-  "shops": [
-    {"name": "新光三越", "aliases": ["新光三越台北站前店", "SHIN KONG MITSUKOSHI"], "zone": "Z", "near_exits": ["Z2", "Z4"], "kind": "地標", "verified": true, "source": "Wikipedia 站前地下街（Z2、Z4出口描述）"},
-    {"name": "國立台灣博物館", "aliases": ["台灣博物館", "臺灣博物館", "台博館"], "zone": "Z", "near_exits": ["Z4", "Z6"], "kind": "地標", "verified": true, "source": "Wikipedia 站前地下街（Z4、Z6出口描述）"},
-    {"name": "台北郵局", "aliases": ["臺北郵局", "北門郵局"], "zone": "Z", "near_exits": ["Z10"], "kind": "地標", "verified": true, "source": "Wikipedia 站前地下街（Z10出口描述）"},
-    {"name": "原動力", "aliases": [], "zone": "Z", "near_exits": [], "kind": "電玩", "note": "站前地下街2-1號", "verified": true, "source": "臺北市市場處 站前地下街․原動力 專題"},
-    {"name": "東森廣場", "aliases": ["東森廣場台北店", "東森購物"], "zone": "K", "near_exits": [], "kind": "商場", "verified": true, "source": "臺北市市場處 K區地下街介紹"},
-    {"name": "京站時尚廣場", "aliases": ["京站", "Q SQUARE", "QSQUARE", "台北轉運站", "臺北轉運站"], "zone": "Y", "near_exits": [], "kind": "地標", "note": "在台北地下街北側，可地下連通", "verified": true, "source": "Wikipedia 台北地下街、OpenStreetMap"},
-    {"name": "木棉花", "aliases": ["MUSE", "木棉花門市"], "zone": "Y", "near_exits": ["Y22"], "kind": "動漫", "note": "北門站連通道附近", "verified": true, "source": "uptogo 台北地下街模型區整理"},
-    {"name": "盲人按摩", "aliases": ["視障按摩"], "zone": "Y", "near_exits": [], "kind": "按摩", "note": "北門站那一端有好幾家", "verified": true, "source": "taiwanderers Taipei City Mall"}
-  ]
+  "Z": {
+   "name": "站前地下街（Z區）",
+   "where": "忠孝西路一段下方，東起南陽街（新光三越台北站前店前），西至重慶南路，全長約343公尺",
+   "layout": "共17間店鋪、6處廣場；Z2、Z4、Z6、Z8、Z10 在忠孝西路南側",
+   "help_desk": "待實地確認",
+   "source": "臺北市市場處站前地下街介紹（tcma.gov.taipei）、Wikipedia 站前地下街"
+  },
+  "K": {
+   "name": "K區地下街（東森廣場台北店）",
+   "where": "台北車站站前廣場地下，連接台鐵、高鐵南側各門",
+   "layout": "K1~K12出入口；2023年4月起由東森購物接手營運",
+   "help_desk": "待實地確認",
+   "source": "臺北市市場處K區地下街介紹（tcma.gov.taipei）、Wikipedia 台北車站K區地下街"
+  },
+  "R": {
+   "name": "中山地下街（R區）",
+   "where": "捷運台北車站到雙連站之間的地下，上方是心中山線形公園",
+   "layout": "書街、文創百貨、咖啡輕食",
+   "help_desk": "待實地確認",
+   "source": "台北捷運公司中山地下街簡介（metro.taipei）"
+  },
+  "M": {
+   "name": "捷運台北車站",
+   "where": "淡水信義線、板南線交會站",
+   "layout": "M1~M8出口",
+   "help_desk": "捷運站詢問處（站務人員可協助行動不便旅客）",
+   "source": "教育部捷運搭乘手冊（捷運車站旅客詢問處服務項目）"
+  },
+  "T": {
+   "name": "台北車站（台鐵、高鐵大廳一帶）",
+   "where": "台北車站本體，東西南北各有出入門",
+   "layout": "B1 台鐵、高鐵進出站口；B3 捷運、台鐵、高鐵售票與驗票",
+   "help_desk": "詢問處",
+   "source": "OpenStreetMap"
+  }
+ },
+ "exits": [
+  {
+   "id": "K1",
+   "zone": "K",
+   "side": "",
+   "leads_to": "北平西路；往台鐵、高鐵南一門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.046986,
+   "lon": 121.5172528
+  },
+  {
+   "id": "K2",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南一門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0466193,
+   "lon": 121.5173562
+  },
+  {
+   "id": "K3",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南二門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0467905,
+   "lon": 121.5169582
+  },
+  {
+   "id": "K4",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南二門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0468373,
+   "lon": 121.5167737
+  },
+  {
+   "id": "K5",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南三門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0467294,
+   "lon": 121.5167353
+  },
+  {
+   "id": "K6",
+   "zone": "K",
+   "side": "",
+   "leads_to": "往台鐵、高鐵南三門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0469923,
+   "lon": 121.5162973
+  },
+  {
+   "id": "K7",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南三門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0471779,
+   "lon": 121.5164481
+  },
+  {
+   "id": "K8",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路；往台鐵、高鐵南三門、西三門",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0471014,
+   "lon": 121.5158493
+  },
+  {
+   "id": "K9",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0471676,
+   "lon": 121.5155053
+  },
+  {
+   "id": "K10",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0470569,
+   "lon": 121.5152596
+  },
+  {
+   "id": "K11",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0472323,
+   "lon": 121.5152545
+  },
+  {
+   "id": "K12",
+   "zone": "K",
+   "side": "",
+   "leads_to": "忠孝西路",
+   "verified": true,
+   "source": "Wikipedia 台北車站K區地下街；OpenStreetMap",
+   "lat": 25.0472004,
+   "lon": 121.5148421
+  },
+  {
+   "id": "M1",
+   "zone": "M",
+   "side": "",
+   "leads_to": "與台北地下街Y2共用通往地面的樓梯",
+   "verified": true,
+   "source": "Wikipedia 台北地下街；OpenStreetMap",
+   "lat": 25.048253,
+   "lon": 121.5181697
+  },
+  {
+   "id": "M2",
+   "zone": "M",
+   "side": "",
+   "leads_to": "M2",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0480916,
+   "lon": 121.5190094
+  },
+  {
+   "id": "M3",
+   "zone": "M",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.046293,
+   "lon": 121.5177943
+  },
+  {
+   "id": "M4",
+   "zone": "M",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0464847,
+   "lon": 121.5173329
+  },
+  {
+   "id": "M5",
+   "zone": "M",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0467795,
+   "lon": 121.5161582
+  },
+  {
+   "id": "M6",
+   "zone": "M",
+   "side": "",
+   "leads_to": "台北凱撒大飯店",
+   "verified": true,
+   "source": "uptogo 台灣青旅膠囊旅店交通整理；OpenStreetMap",
+   "lat": 25.0461142,
+   "lon": 121.5168062,
+   "note": "只有樓梯，沒有電梯或手扶梯"
+  },
+  {
+   "id": "M7",
+   "zone": "M",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.046061,
+   "lon": 121.5186555
+  },
+  {
+   "id": "M8",
+   "zone": "M",
+   "side": "",
+   "leads_to": "公園路",
+   "verified": true,
+   "source": "uptogo 台灣青旅膠囊旅店交通整理（只提到位置，通往哪裡待確認）；OpenStreetMap",
+   "lat": 25.0457834,
+   "lon": 121.5175029
+  },
+  {
+   "id": "R1",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0486352,
+   "lon": 121.5190119,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "R2",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0495538,
+   "lon": 121.5196961
+  },
+  {
+   "id": "R3",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0497877,
+   "lon": 121.5199494
+  },
+  {
+   "id": "R4",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0505384,
+   "lon": 121.5201474
+  },
+  {
+   "id": "R5",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0507811,
+   "lon": 121.5201957
+  },
+  {
+   "id": "R6",
+   "zone": "R",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0513743,
+   "lon": 121.5202441
+  },
+  {
+   "id": "Y1",
+   "zone": "Y",
+   "side": "北側",
+   "leads_to": "",
+   "verified": true,
+   "source": "Wikipedia 台北地下街（僅列出編號）；OpenStreetMap",
+   "lat": 25.0485849,
+   "lon": 121.5186581
+  },
+  {
+   "id": "Y2",
+   "zone": "Y",
+   "side": "南側",
+   "leads_to": "與捷運M1出口共用通往地面的樓梯",
+   "verified": true,
+   "source": "Wikipedia 台北地下街；OpenStreetMap",
+   "lat": 25.0483327,
+   "lon": 121.5184437
+  },
+  {
+   "id": "Y3",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0487981,
+   "lon": 121.5180143
+  },
+  {
+   "id": "Y4",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0482191,
+   "lon": 121.5178121,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "Y5",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0488964,
+   "lon": 121.5173706
+  },
+  {
+   "id": "Y6",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0484104,
+   "lon": 121.517535
+  },
+  {
+   "id": "Y7",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0489803,
+   "lon": 121.5161428
+  },
+  {
+   "id": "Y8",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0483852,
+   "lon": 121.5167243
+  },
+  {
+   "id": "Y9",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0490388,
+   "lon": 121.5158039,
+   "wheelchair": "limited"
+  },
+  {
+   "id": "Y10",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0486302,
+   "lon": 121.5161726,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "Y12",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0487211,
+   "lon": 121.5156098
+  },
+  {
+   "id": "Y17",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0494896,
+   "lon": 121.5137089
+  },
+  {
+   "id": "Y19",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0497129,
+   "lon": 121.5129463
+  },
+  {
+   "id": "Y21",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0499766,
+   "lon": 121.5122444
+  },
+  {
+   "id": "Y22",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "靠近捷運北門站連通道",
+   "verified": true,
+   "source": "uptogo 台北地下街模型區整理"
+  },
+  {
+   "id": "Y23",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0501153,
+   "lon": 121.5116838
+  },
+  {
+   "id": "Y25",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0501875,
+   "lon": 121.5113046
+  },
+  {
+   "id": "Y26",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0497574,
+   "lon": 121.5115694
+  },
+  {
+   "id": "Y27",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0503037,
+   "lon": 121.510663
+  },
+  {
+   "id": "Y28",
+   "zone": "Y",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0499144,
+   "lon": 121.5108058
+  },
+  {
+   "id": "Z1",
+   "zone": "Z",
+   "side": "北側",
+   "leads_to": "承德路、桃園機場捷運、台北車站台鐵高鐵",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.0469572,
+   "lon": 121.5155152
+  },
+  {
+   "id": "Z2",
+   "zone": "Z",
+   "side": "南側",
+   "leads_to": "南陽街、新光三越台北站前店、台北凱撒大飯店",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.0464818,
+   "lon": 121.5157272
+  },
+  {
+   "id": "Z3",
+   "zone": "Z",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0470856,
+   "lon": 121.5146228
+  },
+  {
+   "id": "Z4",
+   "zone": "Z",
+   "side": "南側",
+   "leads_to": "館前路、新光三越台北站前店、國立台灣博物館",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.0465883,
+   "lon": 121.5152884
+  },
+  {
+   "id": "Z5",
+   "zone": "Z",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0473437,
+   "lon": 121.5135774
+  },
+  {
+   "id": "Z6",
+   "zone": "Z",
+   "side": "南側",
+   "leads_to": "館前路、國立台灣博物館",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.046742,
+   "lon": 121.5146739
+  },
+  {
+   "id": "Z7",
+   "zone": "Z",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0475295,
+   "lon": 121.5134659
+  },
+  {
+   "id": "Z8",
+   "zone": "Z",
+   "side": "南側",
+   "leads_to": "懷寧街、台北廣場大廈",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.0469646,
+   "lon": 121.5137787
+  },
+  {
+   "id": "Z9",
+   "zone": "Z",
+   "side": "",
+   "leads_to": "",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0475797,
+   "lon": 121.5132024
+  },
+  {
+   "id": "Z10",
+   "zone": "Z",
+   "side": "南側",
+   "leads_to": "重慶南路、台北郵局、北門（承恩門）",
+   "verified": true,
+   "source": "Wikipedia 站前地下街；OpenStreetMap",
+   "lat": 25.0470144,
+   "lon": 121.5130667
+  },
+  {
+   "id": "北1門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站北1門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0481833,
+   "lon": 121.5176561,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "北2門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站北2門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0482564,
+   "lon": 121.5172285,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "北3門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站北3門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.048329,
+   "lon": 121.516798,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "南1門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站南1門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0472028,
+   "lon": 121.5170068,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "南2門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站南2門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0472036,
+   "lon": 121.5170021,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "東1門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站東1門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0478494,
+   "lon": 121.5178885,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "東2門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站東2門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0475967,
+   "lon": 121.5178345,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "東3門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站東3門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.047344,
+   "lon": 121.5177869,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "西1門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站西1門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0480979,
+   "lon": 121.5164439,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "西2門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站西2門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0478466,
+   "lon": 121.5163901,
+   "wheelchair": "yes"
+  },
+  {
+   "id": "西3門",
+   "zone": "T",
+   "side": "",
+   "leads_to": "台北車站西3門",
+   "verified": true,
+   "source": "OpenStreetMap",
+   "lat": 25.0475921,
+   "lon": 121.5163357,
+   "wheelchair": "yes"
+  }
+ ],
+ "shops": [
+  {
+   "name": "星巴克",
+   "aliases": [
+    "Starbucks"
+   ],
+   "zone": "M",
+   "kind": "cafe",
+   "level": "-1",
+   "lat": 25.0460314,
+   "lon": 121.5180644,
+   "near_exits": [
+    "M3",
+    "M7"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "國泰世華商業銀行",
+   "aliases": [
+    "Cathay United Bank"
+   ],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.046236,
+   "lon": 121.5171102,
+   "near_exits": [
+    "M6",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "國泰世華商業銀行",
+   "aliases": [
+    "Cathay United Bank"
+   ],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.046257,
+   "lon": 121.517021,
+   "near_exits": [
+    "M6",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "國泰世華商業銀行",
+   "aliases": [
+    "Cathay United Bank"
+   ],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.0463619,
+   "lon": 121.5176296,
+   "near_exits": [
+    "M3",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "國泰世華商業銀行",
+   "aliases": [
+    "Cathay United Bank"
+   ],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-2",
+   "lat": 25.0463125,
+   "lon": 121.5168876,
+   "near_exits": [
+    "M6",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "國泰世華商業銀行",
+   "aliases": [
+    "Cathay United Bank"
+   ],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.0460783,
+   "lon": 121.5176399,
+   "near_exits": [
+    "M3",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "7-Eleven",
+   "aliases": [],
+   "zone": "K",
+   "kind": "convenience",
+   "level": "-1",
+   "lat": 25.046899,
+   "lon": 121.5176558,
+   "near_exits": [
+    "K1",
+    "K2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Amo阿默典藏蛋糕",
+   "aliases": [],
+   "zone": "M",
+   "kind": "bakery",
+   "level": "-1",
+   "lat": 25.0465899,
+   "lon": 121.5159779,
+   "near_exits": [
+    "M5",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "麵屋武藏",
+   "aliases": [
+    "Menya Musashi"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0460021,
+   "lon": 121.5169554,
+   "near_exits": [
+    "M6",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "飯饌",
+   "aliases": [
+    "Bannchan"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0457823,
+   "lon": 121.5169084,
+   "near_exits": [
+    "M6",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "大戸屋",
+   "aliases": [
+    "Ootoya"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.046123,
+   "lon": 121.5165474,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "吉野家",
+   "aliases": [
+    "Yoshinoya"
+   ],
+   "zone": "M",
+   "kind": "fast_food",
+   "level": "-1",
+   "lat": 25.04616,
+   "lon": 121.5165499,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "太陽蕃茄拉麵",
+   "aliases": [
+    "Taiyo no Tomatomen"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0461643,
+   "lon": 121.5163505,
+   "near_exits": [
+    "M6",
+    "M5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "屯京拉麵",
+   "aliases": [
+    "Tonchin Ramen"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0461748,
+   "lon": 121.516289,
+   "near_exits": [
+    "M6",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "微風台北車站",
+   "aliases": [
+    "Breeze Taipei Station"
+   ],
+   "zone": "T",
+   "kind": "mall",
+   "level": "-1;0;1",
+   "lat": 25.0477416,
+   "lon": 121.5170997,
+   "near_exits": [
+    "Y8",
+    "K1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "誠品書店",
+   "aliases": [
+    "Eslite Bookstore"
+   ],
+   "zone": "M",
+   "kind": "books",
+   "level": "-1",
+   "lat": 25.0461715,
+   "lon": 121.5178607,
+   "near_exits": [
+    "M3",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "康是美",
+   "aliases": [
+    "COSMED"
+   ],
+   "zone": "M",
+   "kind": "chemist",
+   "level": "-1",
+   "lat": 25.0465125,
+   "lon": 121.5177871,
+   "near_exits": [
+    "M3",
+    "K2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Giordano",
+   "aliases": [],
+   "zone": "M",
+   "kind": "clothes",
+   "level": "-1",
+   "lat": 25.0464244,
+   "lon": 121.5176984,
+   "near_exits": [
+    "M3",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "樂田麵包屋",
+   "aliases": [
+    "GAKUDEN"
+   ],
+   "zone": "M",
+   "kind": "bakery",
+   "level": "-1",
+   "lat": 25.0463157,
+   "lon": 121.5174818,
+   "near_exits": [
+    "M4",
+    "M3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "吉豚屋",
+   "aliases": [
+    "Katsuya"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0459603,
+   "lon": 121.5171136,
+   "near_exits": [
+    "M6",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "吉豚屋",
+   "aliases": [
+    "Katsuya"
+   ],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0489743,
+   "lon": 121.5174804,
+   "near_exits": [
+    "Y5",
+    "Y3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "捷運警察隊",
+   "aliases": [],
+   "zone": "R",
+   "kind": "police",
+   "level": "-2",
+   "lat": 25.0493257,
+   "lon": 121.5188517,
+   "near_exits": [
+    "R1",
+    "Y1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "開丼",
+   "aliases": [
+    "Kaidon"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0456686,
+   "lon": 121.5170956,
+   "near_exits": [
+    "M8",
+    "M6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "石研室石頭火鍋",
+   "aliases": [
+    "Shi Yan Shi"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0458029,
+   "lon": 121.517138,
+   "near_exits": [
+    "M8",
+    "M6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "讚岐製麵所",
+   "aliases": [
+    "Sanuki Seimensyo"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0461799,
+   "lon": 121.5164697,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "路易莎咖啡",
+   "aliases": [
+    "Louisa Coffee"
+   ],
+   "zone": "M",
+   "kind": "cafe",
+   "level": "-1",
+   "lat": 25.0461089,
+   "lon": 121.5166099,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "花月嵐拉麵",
+   "aliases": [
+    "Ramen Kaketsu Arashi"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0461442,
+   "lon": 121.5164422,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "7-Eleven",
+   "aliases": [],
+   "zone": "M",
+   "kind": "convenience",
+   "level": "-1",
+   "lat": 25.04627,
+   "lon": 121.5167692,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "岩島成",
+   "aliases": [
+    "Gino Pasco"
+   ],
+   "zone": "M",
+   "kind": "bakery",
+   "level": "-1",
+   "lat": 25.0462563,
+   "lon": 121.5168488,
+   "near_exits": [
+    "M6",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "順成蛋糕",
+   "aliases": [
+    "Shun Chen Bakery"
+   ],
+   "zone": "M",
+   "kind": "bakery",
+   "level": "-1",
+   "lat": 25.0462483,
+   "lon": 121.516886,
+   "near_exits": [
+    "M6",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "菘麵坊",
+   "aliases": [],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0468311,
+   "lon": 121.5172246,
+   "near_exits": [
+    "K1",
+    "K2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Sushi Motto",
+   "aliases": [],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0467727,
+   "lon": 121.5168746,
+   "near_exits": [
+    "K3",
+    "K4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "八方雲集",
+   "aliases": [
+    "Bafang Dumpling"
+   ],
+   "zone": "K",
+   "kind": "fast_food",
+   "level": "-2",
+   "lat": 25.047006,
+   "lon": 121.5166989,
+   "near_exits": [
+    "K4",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Bitcoin Cryptocurrency ATM",
+   "aliases": [],
+   "zone": "M",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.0466994,
+   "lon": 121.5164022,
+   "near_exits": [
+    "M5",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵售票處",
+   "aliases": [],
+   "zone": "T",
+   "kind": "ticket",
+   "level": "-1",
+   "lat": 25.0473176,
+   "lon": 121.5168773,
+   "near_exits": [
+    "K7",
+    "K1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "計程車上客處",
+   "aliases": [],
+   "zone": "T",
+   "kind": "taxi",
+   "level": "-1",
+   "lat": 25.0479895,
+   "lon": 121.5161631,
+   "near_exits": [
+    "Y10",
+    "Y8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "台鐵東出口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0475928,
+   "lon": 121.5179278,
+   "near_exits": [
+    "Y4",
+    "M1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "和洋食堂",
+   "aliases": [],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-2",
+   "lat": 25.0469854,
+   "lon": 121.5170715,
+   "near_exits": [
+    "K1",
+    "K3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "21風味館",
+   "aliases": [
+    "21 Plus Chicken"
+   ],
+   "zone": "K",
+   "kind": "fast_food",
+   "level": "-1",
+   "lat": 25.0467529,
+   "lon": 121.5170282,
+   "near_exits": [
+    "K3",
+    "K4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "炸去啃",
+   "aliases": [],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0470454,
+   "lon": 121.5160619,
+   "near_exits": [
+    "K8",
+    "K6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "鬍鬚張",
+   "aliases": [
+    "Formosa Chang"
+   ],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0469327,
+   "lon": 121.517013,
+   "near_exits": [
+    "K3",
+    "K1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵B3售票處",
+   "aliases": [],
+   "zone": "T",
+   "kind": "ticket",
+   "level": "-3",
+   "lat": 25.0472755,
+   "lon": 121.518021,
+   "near_exits": [
+    "K1",
+    "K2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-3",
+   "lat": 25.0478837,
+   "lon": 121.518444,
+   "near_exits": [
+    "M1",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "台鐵B3售票處",
+   "aliases": [],
+   "zone": "T",
+   "kind": "ticket",
+   "level": "-3",
+   "lat": 25.0477095,
+   "lon": 121.5177691,
+   "near_exits": [
+    "Y4",
+    "M1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵B3售票處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "ticket",
+   "level": "-3",
+   "lat": 25.0480453,
+   "lon": 121.5182183,
+   "near_exits": [
+    "M1",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "大阪王将",
+   "aliases": [
+    "Osaka Ohsho"
+   ],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0461368,
+   "lon": 121.5154102,
+   "near_exits": [
+    "Z2",
+    "Z4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "干單食堂",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0460634,
+   "lon": 121.5154124,
+   "near_exits": [
+    "Z2",
+    "Z4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "正香",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0459837,
+   "lon": 121.5151789,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "花蓮扁食",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0459838,
+   "lon": 121.5152922,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "葡吉小廚",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0458286,
+   "lon": 121.5151795,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "漾紅花",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0458279,
+   "lon": 121.5152913,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "富旺小館",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0459166,
+   "lon": 121.5154167,
+   "near_exits": [
+    "Z2",
+    "Z4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "茶湯會",
+   "aliases": [
+    "TP Tea"
+   ],
+   "zone": "Z",
+   "kind": "beverages",
+   "level": "-1",
+   "lat": 25.0459059,
+   "lon": 121.5152918,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "珊瑚橘 LIVING CORAL",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0459062,
+   "lon": 121.5151792,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "虎次郎",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.04599,
+   "lon": 121.5154146,
+   "near_exits": [
+    "Z2",
+    "Z4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "丸亀製麺",
+   "aliases": [
+    "Marugame Seimen"
+   ],
+   "zone": "Z",
+   "kind": "fast_food",
+   "level": "-1",
+   "lat": 25.0460618,
+   "lon": 121.5152926,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Häagen-Dazs",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "ice_cream",
+   "level": "-2",
+   "lat": 25.0462102,
+   "lon": 121.5154081,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "豆腐村",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-2",
+   "lat": 25.0461388,
+   "lon": 121.5151783,
+   "near_exits": [
+    "Z4",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "鯛魚燒",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0497609,
+   "lon": 121.5127508,
+   "near_exits": [
+    "Y19",
+    "Y21"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "昇興食品坊",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0494335,
+   "lon": 121.5133019,
+   "near_exits": [
+    "Y17",
+    "Y19"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "荷雅精緻美食",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0496887,
+   "lon": 121.5129984,
+   "near_exits": [
+    "Y19",
+    "Y17"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "福村飲食店",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0495078,
+   "lon": 121.5129445,
+   "near_exits": [
+    "Y19",
+    "Y17"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高湯屋",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0495818,
+   "lon": 121.5127071,
+   "near_exits": [
+    "Y19",
+    "Y21"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "福氣來餐飲連鎖",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0496355,
+   "lon": 121.5125071,
+   "near_exits": [
+    "Y19",
+    "Y21"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "豪品時尚料理會館",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0498312,
+   "lon": 121.5125476,
+   "near_exits": [
+    "Y21",
+    "Y19"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "焗工房",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0498914,
+   "lon": 121.5123601,
+   "near_exits": [
+    "Y21",
+    "Y19"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "鼎記牛肉麵",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0496958,
+   "lon": 121.5122836,
+   "near_exits": [
+    "Y21",
+    "Y19"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "坂鍋達人",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0497421,
+   "lon": 121.512111,
+   "near_exits": [
+    "Y21",
+    "Y26"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Lingos義大利美食餐廳",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0498831,
+   "lon": 121.5119487,
+   "near_exits": [
+    "Y21",
+    "Y23"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "南洋小吃店",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0499229,
+   "lon": 121.5121603,
+   "near_exits": [
+    "Y21",
+    "Y23"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Maiden Dinner夢幻餐車",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0499104,
+   "lon": 121.5118049,
+   "near_exits": [
+    "Y23",
+    "Y26"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "名捷印尼餐廳",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0499919,
+   "lon": 121.5114868,
+   "near_exits": [
+    "Y23",
+    "Y26"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "印尼小吃店",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0500325,
+   "lon": 121.5112668,
+   "near_exits": [
+    "Y25",
+    "Y23"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Maiden School夢幻學園",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0500479,
+   "lon": 121.5110757,
+   "near_exits": [
+    "Y25",
+    "Y28"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "新美心印尼餐廳",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0499457,
+   "lon": 121.5116572,
+   "near_exits": [
+    "Y23",
+    "Y26"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "阿昌哥印尼料理",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0500631,
+   "lon": 121.5109192,
+   "near_exits": [
+    "Y28",
+    "Y27"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "GraPARI TAIPEI",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.050055,
+   "lon": 121.5107826,
+   "near_exits": [
+    "Y28",
+    "Y27"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0478666,
+   "lon": 121.5170622,
+   "near_exits": [
+    "Y8",
+    "Y6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0474938,
+   "lon": 121.516987,
+   "near_exits": [
+    "K1",
+    "K7"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "阿決小吃店",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0469198,
+   "lon": 121.5146403,
+   "near_exits": [
+    "Z3",
+    "Z6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "福氣來",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0467589,
+   "lon": 121.5152416,
+   "near_exits": [
+    "Z4",
+    "K10"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "品麻辣豆腐鴨血專賣店",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0468936,
+   "lon": 121.5147994,
+   "near_exits": [
+    "Z6",
+    "Z3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "樂法 Le Phare",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.046841,
+   "lon": 121.5150033,
+   "near_exits": [
+    "Z6",
+    "K10"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "宥祐素食坊",
+   "aliases": [],
+   "zone": "K",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0472145,
+   "lon": 121.5147494,
+   "near_exits": [
+    "K12",
+    "Z3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "爭鮮gogo",
+   "aliases": [
+    "Sushi Take Out"
+   ],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0479699,
+   "lon": 121.5185944,
+   "near_exits": [
+    "Y2",
+    "M2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "米達人",
+   "aliases": [],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0481562,
+   "lon": 121.5182837,
+   "near_exits": [
+    "M1",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "7-Eleven",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "convenience",
+   "level": "-1",
+   "lat": 25.0467016,
+   "lon": 121.5151913,
+   "near_exits": [
+    "Z4",
+    "K10"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "福祿屋和食拉麵",
+   "aliases": [],
+   "zone": "Z",
+   "kind": "restaurant",
+   "level": "-1",
+   "lat": 25.0471494,
+   "lon": 121.5142903,
+   "near_exits": [
+    "Z3",
+    "Z8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "聯邦商業銀行",
+   "aliases": [
+    "Union Bank of Taiwan"
+   ],
+   "zone": "Y",
+   "kind": "atm",
+   "level": "-1",
+   "lat": 25.0487205,
+   "lon": 121.5147247,
+   "near_exits": [
+    "Y12",
+    "Y9"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "JINS",
+   "aliases": [],
+   "zone": "K",
+   "kind": "optician",
+   "level": "-1",
+   "lat": 25.0469679,
+   "lon": 121.5167617,
+   "near_exits": [
+    "K4",
+    "K5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "爭鮮",
+   "aliases": [
+    "Sushi Express"
+   ],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0481011,
+   "lon": 121.5189617,
+   "near_exits": [
+    "M2",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "7-Eleven",
+   "aliases": [],
+   "zone": "M",
+   "kind": "convenience",
+   "level": "-3",
+   "lat": 25.0478773,
+   "lon": 121.5188205,
+   "near_exits": [
+    "M2",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "嚐鱻",
+   "aliases": [],
+   "zone": "M",
+   "kind": "fast_food",
+   "level": "-3",
+   "lat": 25.0478091,
+   "lon": 121.5187769,
+   "near_exits": [
+    "M2",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "樂法Le Phare",
+   "aliases": [],
+   "zone": "M",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0477676,
+   "lon": 121.5187519,
+   "near_exits": [
+    "M2",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "微風A1機場捷運站",
+   "aliases": [
+    "Breeze A1 Airport MRT Station"
+   ],
+   "zone": "Y",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0486377,
+   "lon": 121.5143225,
+   "near_exits": [
+    "Y17",
+    "Y12"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0476181,
+   "lon": 121.517012,
+   "near_exits": [
+    "K1",
+    "K7"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0474736,
+   "lon": 121.517116,
+   "near_exits": [
+    "K1",
+    "K7"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0475952,
+   "lon": 121.5171405,
+   "near_exits": [
+    "K1",
+    "K7"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0478432,
+   "lon": 121.5171906,
+   "near_exits": [
+    "Y6",
+    "Y4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0479684,
+   "lon": 121.5172158,
+   "near_exits": [
+    "Y6",
+    "Y4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵進站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0479908,
+   "lon": 121.5170873,
+   "near_exits": [
+    "Y8",
+    "Y6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0475997,
+   "lon": 121.5163443,
+   "near_exits": [
+    "K7",
+    "K6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0477244,
+   "lon": 121.5163695,
+   "near_exits": [
+    "K7",
+    "Y8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0479734,
+   "lon": 121.5164197,
+   "near_exits": [
+    "Y8",
+    "Y10"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0480977,
+   "lon": 121.5164448,
+   "near_exits": [
+    "Y8",
+    "Y10"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵東出口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.047995,
+   "lon": 121.5178444,
+   "near_exits": [
+    "Y4",
+    "M1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵便當本舖4號店",
+   "aliases": [],
+   "zone": "T",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0476694,
+   "lon": 121.5180548,
+   "near_exits": [
+    "Y4",
+    "M1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵便當本舖3號店",
+   "aliases": [],
+   "zone": "T",
+   "kind": "deli",
+   "level": "-1",
+   "lat": 25.048016,
+   "lon": 121.5178607,
+   "near_exits": [
+    "Y4",
+    "M1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "臺鐵便當本舖2號店",
+   "aliases": [],
+   "zone": "K",
+   "kind": "deli",
+   "level": "-1",
+   "lat": 25.0473794,
+   "lon": 121.5165227,
+   "near_exits": [
+    "K7",
+    "K6"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Mum Mum Cake",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "bakery",
+   "level": "-2",
+   "lat": 25.0490647,
+   "lon": 121.5177906,
+   "near_exits": [
+    "Y3",
+    "Y5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "德州美墨炸雞",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "fast_food",
+   "level": "-2",
+   "lat": 25.0489129,
+   "lon": 121.5178433,
+   "near_exits": [
+    "Y3",
+    "Y5"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-1",
+   "lat": 25.0461807,
+   "lon": 121.517985,
+   "near_exits": [
+    "M3",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-1",
+   "lat": 25.0466825,
+   "lon": 121.5159626,
+   "near_exits": [
+    "M5",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0473528,
+   "lon": 121.5178468,
+   "near_exits": [
+    "K1",
+    "K2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "高鐵出站口",
+   "aliases": [],
+   "zone": "T",
+   "kind": "",
+   "level": "-1",
+   "lat": 25.0474879,
+   "lon": 121.5178741,
+   "near_exits": [
+    "Y4",
+    "K1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "禾田自然主義Shabu Shabu",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "restaurant",
+   "level": "-3",
+   "lat": 25.0492003,
+   "lon": 121.517659,
+   "near_exits": [
+    "Y5",
+    "Y3"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "全家便利商店",
+   "aliases": [
+    "FamilyMart"
+   ],
+   "zone": "Y",
+   "kind": "convenience",
+   "level": "-1",
+   "lat": 25.0492696,
+   "lon": 121.5131767,
+   "near_exits": [
+    "Y19",
+    "Y17"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "客美多咖啡",
+   "aliases": [
+    "Komeda Coffee Shop"
+   ],
+   "zone": "M",
+   "kind": "cafe",
+   "level": "-1",
+   "lat": 25.0460178,
+   "lon": 121.5169084,
+   "near_exits": [
+    "M6",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "EZfly",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "ticket",
+   "level": "-1",
+   "lat": 25.048704,
+   "lon": 121.5151543,
+   "near_exits": [
+    "Y12",
+    "Y9"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "旅遊服務中心",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "information",
+   "level": "-2",
+   "lat": 25.0487474,
+   "lon": 121.5146745,
+   "near_exits": [
+    "Y12",
+    "Y9"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "TransAsia Bakery",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "bakery",
+   "level": "-2",
+   "lat": 25.0487053,
+   "lon": 121.5149979,
+   "near_exits": [
+    "Y12",
+    "Y9"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "CoCo都可",
+   "aliases": [
+    "CoCo Fresh Tea & Juice"
+   ],
+   "zone": "M",
+   "kind": "cafe",
+   "level": "-1",
+   "lat": 25.0463644,
+   "lon": 121.5177246,
+   "near_exits": [
+    "M3",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "Mister Donut",
+   "aliases": [],
+   "zone": "M",
+   "kind": "fast_food",
+   "level": "-1",
+   "lat": 25.0462602,
+   "lon": 121.5177024,
+   "near_exits": [
+    "M3",
+    "M4"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "新光三越",
+   "aliases": [
+    "新光三越台北站前店",
+    "SHIN KONG MITSUKOSHI"
+   ],
+   "zone": "Z",
+   "near_exits": [
+    "Z2",
+    "Z4"
+   ],
+   "kind": "地標",
+   "verified": true,
+   "source": "Wikipedia 站前地下街（Z2、Z4出口描述）"
+  },
+  {
+   "name": "國立台灣博物館",
+   "aliases": [
+    "台灣博物館",
+    "臺灣博物館",
+    "台博館"
+   ],
+   "zone": "Z",
+   "near_exits": [
+    "Z4",
+    "Z6"
+   ],
+   "kind": "地標",
+   "verified": true,
+   "source": "Wikipedia 站前地下街（Z4、Z6出口描述）"
+  },
+  {
+   "name": "台北郵局",
+   "aliases": [
+    "臺北郵局",
+    "北門郵局"
+   ],
+   "zone": "Z",
+   "near_exits": [
+    "Z10"
+   ],
+   "kind": "地標",
+   "verified": true,
+   "source": "Wikipedia 站前地下街（Z10出口描述）"
+  },
+  {
+   "name": "原動力",
+   "aliases": [],
+   "zone": "Z",
+   "near_exits": [],
+   "kind": "電玩",
+   "note": "站前地下街2-1號",
+   "verified": true,
+   "source": "臺北市市場處 站前地下街․原動力 專題"
+  },
+  {
+   "name": "東森廣場",
+   "aliases": [
+    "東森廣場台北店",
+    "東森購物"
+   ],
+   "zone": "K",
+   "near_exits": [],
+   "kind": "商場",
+   "verified": true,
+   "source": "臺北市市場處 K區地下街介紹"
+  },
+  {
+   "name": "木棉花",
+   "aliases": [
+    "MUSE",
+    "木棉花門市"
+   ],
+   "zone": "Y",
+   "near_exits": [
+    "Y22"
+   ],
+   "kind": "動漫",
+   "note": "北門站連通道附近",
+   "verified": true,
+   "source": "uptogo 台北地下街模型區整理"
+  },
+  {
+   "name": "盲人按摩",
+   "aliases": [
+    "視障按摩"
+   ],
+   "zone": "Y",
+   "near_exits": [],
+   "kind": "按摩",
+   "note": "北門站那一端有好幾家",
+   "verified": true,
+   "source": "taiwanderers Taipei City Mall"
+  }
+ ],
+ "areas": [
+  {
+   "name": "台北地下街服飾區",
+   "zone": "Y",
+   "lat": 25.048751,
+   "lon": 121.5166653,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "台北地下街百貨區",
+   "zone": "Y",
+   "lat": 25.0490546,
+   "lon": 121.5150427,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "台北地下街美食區",
+   "zone": "Y",
+   "lat": 25.0499099,
+   "lon": 121.5117133,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "台北地下街電子區",
+   "zone": "Y",
+   "lat": 25.0493613,
+   "lon": 121.513675,
+   "source": "OpenStreetMap"
+  }
+ ],
+ "help_points": [
+  {
+   "name": "捷運警察隊",
+   "aliases": [],
+   "zone": "R",
+   "kind": "police",
+   "level": "-2",
+   "lat": 25.0493257,
+   "lon": 121.5188517,
+   "near_exits": [
+    "R1",
+    "Y1"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-3",
+   "lat": 25.0478837,
+   "lon": 121.518444,
+   "near_exits": [
+    "M1",
+    "Y2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-1",
+   "lat": 25.0461807,
+   "lon": 121.517985,
+   "near_exits": [
+    "M3",
+    "M8"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "詢問處",
+   "aliases": [],
+   "zone": "M",
+   "kind": "information",
+   "level": "-1",
+   "lat": 25.0466825,
+   "lon": 121.5159626,
+   "near_exits": [
+    "M5",
+    "Z2"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  },
+  {
+   "name": "旅遊服務中心",
+   "aliases": [],
+   "zone": "Y",
+   "kind": "information",
+   "level": "-2",
+   "lat": 25.0487474,
+   "lon": 121.5146745,
+   "near_exits": [
+    "Y12",
+    "Y9"
+   ],
+   "verified": true,
+   "source": "OpenStreetMap"
+  }
+ ],
+ "osm": {
+  "attribution": "© OpenStreetMap contributors（ODbL）",
+  "raw": "osm_raw_taipei_main.json",
+  "extracted": "OpenStreetMap contributors (ODbL), api.openstreetmap.org, 2026-11-24 擷取；bbox 121.5100,25.0455,121.5210,25.0515"
+ }
 }

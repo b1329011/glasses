@@ -534,7 +534,8 @@ def api_locate_frame(data: dict = Body(default={})):
         return {"active": True, "speak": False, "error": "沒有收到影像", "stage": SESSION["stage"]}
 
     ocr = sign_client.read_texts(image_b64)
-    out = session.process(ocr.get("texts", []))
+    heading = data.get("heading")     # 手機羅盤（0=北）；前端判斷不可信時不會送
+    out = session.process(ocr.get("texts", []), heading=float(heading) if heading is not None else None)
     if out["done"]:
         LOCATE["last"] = out["result"]
         LOCATE["session"] = None
