@@ -1164,3 +1164,30 @@ def navigate(payload: dict = Body(...)):
         "annotated_base64": f"data:image/jpeg;base64,{annotated_b64}",
         "yolo_error": yolo_error,
     }
+
+
+# ============================================================
+# Agent C 語音導航（兩個後端合併）
+# ============================================================
+# agent_c_navigation/nav_api.py 是 FastAPI router，掛在 /api/agent-c/*；
+# 台北車站指標導引要辨識時，直接呼叫上面的 navigate()，不經過 HTTP。
+def _mount_agent_c():
+    import sys
+    agent_c_dir = config.PROJECT_ROOT / "agent_c_navigation"
+    if not agent_c_dir.exists():
+        print("[Agent C] 找不到 agent_c_navigation 資料夾，略過語音導航 API")
+        return
+    if str(agent_c_dir) not in sys.path:
+        sys.path.insert(0, str(agent_c_dir))
+    try:
+        from nav_api import router as agent_c_router
+        from modules import sign_client
+    except ImportError as e:
+        print(f"[Agent C] 載入失敗（缺套件？請 pip install -r requirements.txt）：{e}")
+        return
+    sign_client.set_local_navigator(navigate)
+    app.include_router(agent_c_router, prefix="/api/agent-c")
+    print("[Agent C] 語音導航 API 已掛載：/api/agent-c/*")
+
+
+_mount_agent_c()

@@ -16,8 +16,7 @@ async function req(path, options = {}) {
   return res.status === 204 ? null : res.json()
 }
 
-// --- Agent C 語音導航後端（Flask app.py）---
-// 走 /api/agent-c/*，Vite 代理到 Flask 並把前綴改回 /api（見 vite.config.js）
+// --- Agent C 語音導航（合併後端的 /api/agent-c/*）---
 const NAV_BASE = '/api/agent-c'
 
 async function navReq(path, body) {

@@ -16,3 +16,8 @@ ultralytics>=8.3.0
 rapidocr-onnxruntime>=1.3.0
 # 備援：EasyOCR（RapidOCR 不可用時自動退回）
 easyocr>=1.7.0
+
+# Agent C 語音導航（agent_c_navigation，已合併進這個後端，掛在 /api/agent-c）
+requests>=2.31.0
+python-dotenv>=1.0.0
+google-generativeai          # 有 GEMINI_API_KEY 時才會用到（語意解析）

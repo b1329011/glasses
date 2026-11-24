@@ -118,6 +118,9 @@ agent_c_outdoor/
 ## 台北車站指標導引（已串接 sign_detector）
 
 在台北車站搭乘、轉乘或下車時，會改用鏡頭看指標牌帶路，說明見根目錄 `README.md`。
+
+網頁 API 已從 Flask 改成 FastAPI router（`nav_api.py`），一般掛在 `webapp/backend` 合併後端的
+`/api/agent-c/*`；`app.py` 只剩「單獨啟動」用途。
 相關模組：`modules/station_guide.py`、`modules/sign_client.py`。
 
 ## 室內模組接續方式（原始規劃）

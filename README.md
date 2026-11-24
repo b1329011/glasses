@@ -31,37 +31,46 @@ sign_detector 的 `/api/navigate` 辨識方向，再用語音播報（例如「�
 
 程式位置：
 - `agent_c_navigation/modules/station_guide.py`：判斷是否在台北車站、規劃要找的指標、穩定播報
-- `agent_c_navigation/modules/sign_client.py`：用 HTTP 呼叫 sign_detector
+- `agent_c_navigation/modules/sign_client.py`：呼叫指標辨識（合併後端直接呼叫函式；單獨啟動時走 HTTP）
 - `agent_c_navigation/modules/routing.py`：`transit_legs` 支援多段搭乘（轉車）
-- `agent_c_navigation/app.py`：新增 `station_guidance` 階段、`/api/sign_frame`、`/api/position`
+- `agent_c_navigation/nav_api.py`：導航 API（`station_guidance` 階段、`/sign_frame`、`/position`），掛在合併後端的 `/api/agent-c`
 
 ## 執行
 
-前端已合成一個（`webapp/frontend`，Vue），後端還是兩個：
+前端和後端都已經合成一個：
 
-| 頁面 | 功能 | 用到的後端 |
-|---|---|---|
-| ① 標註 / ② 訓練 / ③ 辨識測試 | 標註照片、訓練 YOLO、測試辨識 | sign_detector（8000） |
-| 🧭 指標導航 | 手動輸入目標，對準指標牌報方向 | sign_detector（8000） |
-| 🗣️ 語音導航 | 語音指令、GPS 地圖、逐步導航、台北車站指標導引 | Agent C（8080）→ sign_detector |
+- **後端**：`webapp/backend`（FastAPI，port 8000）＝ 指標辨識 API ＋ Agent C 語音導航 API（`/api/agent-c/*`，程式在 `agent_c_navigation/nav_api.py`）。
+  台北車站指標導引要辨識時，直接在同一個程式裡呼叫指標辨識，不經過 HTTP。
+- **前端**：`webapp/frontend`（Vue）
+
+| 頁面 | 功能 |
+|---|---|
+| ① 標註 / ② 訓練 / ③ 辨識測試 | 標註照片、訓練 YOLO、測試辨識 |
+| 🧭 指標導航 | 手動輸入目標，對準指標牌報方向 |
+| 🗣️ 語音導航 | 語音指令、GPS 地圖、逐步導航、台北車站指標導引 |
 
 ```bash
-# 1. 指標辨識服務（需要 ultralytics + OCR）
-cd webapp/backend && pip install -r requirements.txt
+# 終端機 1：後端
+cd webapp/backend
+pip install -r requirements.txt
 uvicorn main:app --port 8000
 
-# 2. Agent C 導航（另一個終端機）
-cd agent_c_navigation && pip install -r requirements.txt
-python3 app.py
-
-# 3. 前端（另一個終端機）
-cd webapp/frontend && npm install
-npm run dev        # 手機開 https://電腦IP:5173，手機預設進「語音導航」，電腦預設進「標註」
+# 終端機 2：前端
+cd webapp/frontend
+npm install
+npm run dev        # 手機開 https://電腦IP:5173（手機預設進語音導航，電腦預設進標註）
 ```
 
-Vite 把 `/api/agent-c/*` 代理到 Agent C（預設 `https://localhost:8080`，可用環境變數 `AGENT_C_URL` 改），
-其餘 `/api/*` 代理到 sign_detector（8000）。`agent_c_navigation/static_index.html` 是舊的單頁版，
-新前端已涵蓋它的所有功能。
+Agent C 的金鑰（GEMINI_API_KEY、GOOGLE_MAPS_API_KEY、TDX_*）一樣放在 `agent_c_navigation/.env`，
+從 `webapp/backend` 啟動也會讀到。
+
+只想測導航、電腦沒裝 YOLO 時，可以單獨啟動 Agent C（舊版單頁介面，https://電腦IP:8080）：
+
+```bash
+cd agent_c_navigation
+pip install -r requirements.txt
+SIGN_DETECTOR_MOCK=1 python3 app.py     # Windows PowerShell：$env:SIGN_DETECTOR_MOCK="1"; python app.py
+```
 
 文字模擬版與轉乘示範：
 

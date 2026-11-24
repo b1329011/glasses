@@ -5,7 +5,7 @@
  *   GPS 追蹤 + 地圖（Leaflet），走到路段終點自動推進 → /api/segment_complete
  *   走向上車處時回報 GPS → /api/position（進入台北車站範圍自動切換指標導引）
  *   台北車站指標導引：開後鏡頭，每秒送影格 → /api/sign_frame（Agent C 轉送 sign_detector）
- * Agent C 的 API 走 /api/agent-c/*，由 Vite 代理到 Flask（見 vite.config.js）。
+ * Agent C 的 API 在合併後端的 /api/agent-c/*。
  */
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import L from 'leaflet'
@@ -141,7 +141,7 @@ async function sendCommand(text) {
   try {
     handleResponse(await navApi.command(text, lat, lng))
   } catch (e) {
-    addBubble('（連線失敗，請確認 Agent C 後端 app.py 有在跑）', 'system')
+    addBubble('（連線失敗，請確認後端 uvicorn main:app 有在跑）', 'system')
     speak('連線失敗，請確認導航後端有在執行')
   }
 }

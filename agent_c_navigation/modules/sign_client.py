@@ -8,10 +8,11 @@ sign_detector（webapp/backend，FastAPI）已經提供「目標導向導航」A
         target="往淡水"     → 在「捷運方向」牌裡找「淡水」，回報旁邊箭頭方向
         target="出口"/"台鐵"/"高鐵" → 直接用 YOLO 圖標，免 OCR
 
-Agent C 不直接 import YOLO / OCR，而是用 HTTP 呼叫這個服務：
-  - 兩邊相依套件分開（Agent C 不用裝 ultralytics / torch / OCR）
-  - 指標辨識服務可以單獨跑在有 GPU 的機器上
-  - 之後搬到眼鏡端時，只要把 SIGN_DETECTOR_URL 指到邊緣裝置即可
+兩種呼叫方式：
+  1. 同一個程式（合併後端，預設）：webapp/backend/main.py 啟動時呼叫
+     set_local_navigator(navigate)，直接呼叫函式，不經過 HTTP
+  2. HTTP：Agent C 單獨啟動（agent_c_navigation/app.py）時，呼叫 SIGN_DETECTOR_URL
+     （之後指標辨識搬到眼鏡端/有 GPU 的機器，也是走這條）
 
 設定（.env）：
     SIGN_DETECTOR_URL=http://127.0.0.1:8000   # sign_detector 後端位址（預設值）
@@ -40,10 +41,19 @@ DEFAULT_NAV_PARAMS = {
 
 _health_cache = {"ok": None, "checked_at": 0.0}
 
+# 合併後端時由 webapp/backend/main.py 注入的 /api/navigate 函式（payload dict → result dict）
+_local_navigator = None
+
+
+def set_local_navigator(fn) -> None:
+    """合併後端用：直接呼叫同一個程式裡的指標辨識，不經過 HTTP。"""
+    global _local_navigator
+    _local_navigator = fn
+
 
 def is_available(cache_sec: float = 30.0) -> bool:
     """檢查 sign_detector 服務是否在線（結果快取 cache_sec 秒）。"""
-    if USE_MOCK:
+    if USE_MOCK or _local_navigator is not None:
         return True
     now = time.time()
     if _health_cache["ok"] is not None and now - _health_cache["checked_at"] < cache_sec:
@@ -85,6 +95,14 @@ def navigate(image_base64: str, target: str, **params) -> dict:
 
     body = {**DEFAULT_NAV_PARAMS, **params, "image_base64": image_base64, "target": target}
     body.pop("annotated", None)
+
+    if _local_navigator is not None:
+        try:
+            data = dict(_local_navigator(body))
+        except Exception as e:  # noqa: BLE001  （FastAPI 的 HTTPException 帶 detail）
+            return {"found": False, "target": target, "error": f"指標辨識失敗：{getattr(e, 'detail', None) or e}"}
+        data.pop("annotated_base64", None)
+        return data
     try:
         resp = requests.post(f"{SIGN_DETECTOR_URL}/api/navigate", json=body, timeout=15)
         if not resp.ok:

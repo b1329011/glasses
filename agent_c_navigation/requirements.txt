@@ -1,5 +1,7 @@
-flask
-pyopenssl
+# 單獨啟動 Agent C（python3 app.py）用；合併後端請裝 webapp/backend/requirements.txt
+fastapi
+uvicorn[standard]
+cryptography         # 產生自簽憑證，手機才能用麥克風/GPS
 requests
 google-generativeai
 python-dotenv

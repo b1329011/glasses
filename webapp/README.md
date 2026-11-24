@@ -6,7 +6,7 @@ Vue 3 前端 + FastAPI 後端的操作介面，讓你不寫程式就能完成整
 2. **訓練** — 設定參數、一鍵訓練、即時看 mAP / precision / recall 與 log
 3. **辨識測試** — 上傳照片或開啟攝影機即時辨識，顯示框、類別、信心值與延遲
 4. **指標導航** — 手機全螢幕鏡頭，輸入目標後報方向
-5. **語音導航** — Agent C 語音導航（地圖、GPS、逐步導航、台北車站指標導引），需要另外啟動 `agent_c_navigation/app.py`
+5. **語音導航** — Agent C 語音導航（地圖、GPS、逐步導航、台北車站指標導引），API 已合併進這個後端（`/api/agent-c/*`）
 
 影像檔與 YOLO 標註 `.txt` 沿用 `../sign-detection/dataset`；類別、影像、標註、
 訓練紀錄等 metadata 存 **MySQL**（連不上時自動退回 SQLite，開箱即用）。
