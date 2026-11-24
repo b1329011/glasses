@@ -62,6 +62,26 @@ LINE_NAME_TRANSLATION = {
 }
 
 
+# 捷運終點站英文 → 中文（Google 的 headsign 常是英文，念出來要中文）
+HEADSIGN_TRANSLATION = {
+    "Tamsui": "淡水", "Beitou": "北投", "Xiangshan": "象山", "Daan": "大安",
+    "Dingpu": "頂埔", "Far Eastern Hospital": "亞東醫院", "Nangang Exhibition Center": "南港展覽館",
+    "Kunyang": "昆陽", "Songshan": "松山", "Xindian": "新店", "Taipower Building": "台電大樓",
+    "Nanshijiao": "南勢角", "Huilong": "迴龍", "Luzhou": "蘆洲", "Taipei Zoo": "動物園",
+    "Taipei Main Station": "台北車站", "Laojie River": "老街溪", "Huanbei": "環北",
+    "Xinbeitou": "新北投", "Dapinglin": "大坪林", "New Taipei Industrial Park": "新北產業園區",
+}
+
+
+def _translate_headsign(h: str) -> str:
+    if not h:
+        return h
+    for en, zh in sorted(HEADSIGN_TRANSLATION.items(), key=lambda kv: -len(kv[0])):
+        if en.lower() in h.lower():
+            return zh
+    return h
+
+
 def _translate_line_name(name: str) -> str:
     """把英文捷運路線名稱翻成中文，查不到就照原樣回傳"""
     return LINE_NAME_TRANSLATION.get(name, name)
@@ -178,7 +198,7 @@ def _parse_transit_leg(step: dict) -> dict:
     leg = {
         "mode": vehicle_label,
         "line_name": line_name,
-        "headsign": details.get("headsign", ""),
+        "headsign": _translate_headsign(details.get("headsign", "")),
         "departure_stop": details.get("stopDetails", {}).get("departureStop", {}).get("name", "附近站牌"),
         "arrival_stop": details.get("stopDetails", {}).get("arrivalStop", {}).get("name", "目的地站"),
         "stop_count": details.get("stopCount", None),
@@ -191,6 +211,12 @@ def _parse_transit_leg(step: dict) -> dict:
 
 
 def _extract_transit_summary(route_data: dict) -> dict:
+    """相容舊呼叫：只取第一條路線。"""
+    routes = route_data.get("routes", [])
+    return _transit_route_to_dict(routes[0]) if routes else None
+
+
+def _transit_route_to_dict(route: dict) -> dict:
     """
     從 Routes API 的完整回應中，解析出完整的大眾運輸搭乘資訊，
     包含上車前走路段、每一段搭乘細節（站名/路線/方向/站數，含轉乘）、下車後走路段，
@@ -204,11 +230,6 @@ def _extract_transit_summary(route_data: dict) -> dict:
     Returns:
         dict: 統一格式的路線資訊，找不到搭乘細節時回傳 None（呼叫端會fallback）
     """
-    routes = route_data.get("routes", [])
-    if not routes:
-        return None
-
-    route = routes[0]
     total_min = round(_parse_duration_seconds(route.get("duration", "0s")) / 60)
 
     legs = route.get("legs", [])
@@ -260,6 +281,7 @@ def _extract_transit_summary(route_data: dict) -> dict:
         "stop_count": first["stop_count"],
         "steps_after": _parse_walk_step_list(pending_walk),
         "transit_legs": transit_legs,
+        "modes": [l["mode"] for l in transit_legs],
     }
 
     if first["mode"] == "公車":
@@ -334,13 +356,14 @@ def _extract_walk_steps(route: dict) -> list:
     return _parse_walk_step_list(legs[0].get("steps", []))
 
 
-def _compute_route_real(origin: dict, destination: dict, travel_mode: str) -> dict:
+def _compute_route_real(origin: dict, destination: dict, travel_mode: str, allowed_modes: list = None) -> list:
     """
-    呼叫 Google Routes API 取得單一交通方式的路線。
+    呼叫 Google Routes API，回傳這種交通方式的所有候選路線（大眾運輸會要替代路線）。
 
     Args:
         origin/destination: {"lat": float, "lng": float}
         travel_mode: "WALK" 或 "TRANSIT"
+        allowed_modes: 大眾運輸限定的工具，例如 ["SUBWAY", "TRAIN", "LIGHT_RAIL", "RAIL"]（只搭軌道）或 ["BUS"]
     """
     headers = {
         "Content-Type": "application/json",
@@ -365,38 +388,102 @@ def _compute_route_real(origin: dict, destination: dict, travel_mode: str) -> di
         "travelMode": travel_mode,
         "languageCode": "zh-TW",
     }
+    if travel_mode == "TRANSIT":
+        body["computeAlternativeRoutes"] = True
+        if allowed_modes:
+            body["transitPreferences"] = {"allowedTravelModes": allowed_modes}
 
     resp = requests.post(ROUTES_API_URL, headers=headers, json=body, timeout=10)
     resp.raise_for_status()
     data = resp.json()
 
+    routes = data.get("routes", [])
     if travel_mode == "WALK":
-        routes = data.get("routes", [])
         if not routes:
-            return None
+            return []
         route = routes[0]
         total_min = round(_parse_duration_seconds(route.get("duration", "0s")) / 60)
+        distance_m = sum(s.get("distanceMeters", 0) for leg in route.get("legs", []) for s in leg.get("steps", []))
 
         # 解析每一段的轉彎指示，組成逐步導航要用的步驟清單
         walk_steps = _extract_walk_steps(route)
 
-        return {
+        return [{
             "mode": "步行",
+            "modes": ["步行"],
             "summary": "全程步行前往目的地",
             "walk_to_station_min": 0,
             "wait_min": 0,
             "total_min": total_min,
+            "distance_m": distance_m,
             "landmark": "",
             "steps": walk_steps,  # 逐步導航要用的完整步驟清單
-        }
+        }]
 
-    # TRANSIT模式：解析完整搭乘細節
-    result = _extract_transit_summary(data)
-    return result
+    # TRANSIT模式：每條候選路線都解析完整搭乘細節
+    return [r for r in (_transit_route_to_dict(route) for route in routes) if r]
+
+
+# ============================================================
+# 交通方式偏好：「搭捷運」「搭公車」「走路」…
+# ============================================================
+# 使用者講法 → 路線裡要出現的交通工具（mode 用 VEHICLE_TYPE_MAP 的中文）
+MODE_PREFERENCE_KEYWORDS = [
+    ("捷運", ["捷運", "地鐵", "MRT", "機捷", "機場捷運", "輕軌"]),
+    ("高鐵", ["高鐵"]),
+    ("火車", ["火車", "台鐵", "臺鐵", "區間車", "自強號", "莒光號"]),
+    ("公車", ["公車", "巴士", "客運", "公交"]),
+    ("步行", ["走路", "步行", "用走的", "走過去", "走去"]),
+    ("大眾運輸", ["搭車", "坐車", "大眾運輸"]),
+]
+
+# 偏好 → 向 Google 要路線時限定的交通工具
+ALLOWED_MODES_FOR = {
+    "捷運": ["SUBWAY", "LIGHT_RAIL"],
+    "火車": ["TRAIN", "RAIL"],
+    "高鐵": ["TRAIN", "RAIL"],
+    "公車": ["BUS"],
+}
+
+MAX_WALK_MIN = 40   # 全程步行超過這個時間就不推薦（除非只剩走路）
+
+
+def detect_mode_preference(text: str):
+    """從一句話找出使用者想搭的交通方式；沒有就回傳 None。"""
+    t = (text or "").upper()
+    for mode, kws in MODE_PREFERENCE_KEYWORDS:
+        if any(k.upper() in t for k in kws):
+            return mode
+    return None
+
+
+def route_matches(route: dict, pref: str) -> bool:
+    modes = route.get("modes") or [route.get("mode")]
+    if pref == "步行":
+        return modes == ["步行"]
+    if pref == "大眾運輸":
+        return modes != ["步行"]
+    return pref in modes
+
+
+def modes_phrase(route: dict, with_verb: bool = False) -> str:
+    """路線用到的交通方式，例如「公車」「公車轉捷運」「捷運轉火車」；with_verb=True 會加「搭」（步行除外）。"""
+    modes = route.get("modes") or [route.get("mode")]
+    if modes == ["步行"]:
+        return "步行"
+    if with_verb:
+        return "搭" + modes_phrase(route)
+    out = []
+    for m in modes:
+        if not out or out[-1] != m:
+            out.append(m)
+    if len(modes) > 1 and len(out) == 1:
+        return f"{out[0]}（轉乘{len(modes) - 1}次）"
+    return "轉".join(out)
 
 
 class RouteSession:
-    """管理一次導航請求的候選路線池，處理「換一個」的切換邏輯。"""
+    """管理一次導航請求的候選路線池，處理「換一個」與「搭捷運／搭公車／走路」的切換。"""
 
     def __init__(self, origin: dict, destination: dict):
         self.origin = origin
@@ -405,28 +492,49 @@ class RouteSession:
         if USE_REAL_ROUTES:
             self.candidates = self._fetch_real_candidates()
         else:
-            self.candidates = sorted(MOCK_ROUTE_POOL, key=lambda r: r["total_min"])
+            self.candidates = self._rank([dict(r) for r in MOCK_ROUTE_POOL])
 
         self.current_index = 0
 
+    # ---------- 取得候選 ----------
+    @staticmethod
+    def _key(r: dict) -> tuple:
+        legs = r.get("transit_legs") or []
+        return (tuple(r.get("modes") or [r.get("mode")]),
+                tuple((l.get("line_name"), l.get("departure_stop")) for l in legs))
+
+    def _rank(self, routes: list) -> list:
+        """去掉重複的、太久的走路，依時間排序。"""
+        uniq, seen = [], set()
+        for r in routes:
+            r.setdefault("modes", [l["mode"] for l in r.get("transit_legs", [])] or [r.get("mode")])
+            k = self._key(r)
+            if k not in seen:
+                seen.add(k)
+                uniq.append(r)
+        transit = [r for r in uniq if r["modes"] != ["步行"]]
+        walk = [r for r in uniq if r["modes"] == ["步行"]]
+        # 走路太久就不放進候選（只剩走路時例外）
+        walk = [r for r in walk if r["total_min"] <= MAX_WALK_MIN] or ([] if transit else walk)
+        return sorted(transit + walk, key=lambda r: r["total_min"])
+
+    def _fetch(self, travel_mode: str, allowed: list = None) -> list:
+        try:
+            return _compute_route_real(self.origin, self.destination, travel_mode, allowed)
+        except Exception as e:  # noqa: BLE001
+            print(f"   [警告] Routes API 呼叫失敗（{travel_mode} {allowed or ''}）：{e}")
+            return []
+
     def _fetch_real_candidates(self) -> list:
-        candidates = []
-        for mode in ["TRANSIT", "WALK"]:
-            try:
-                result = _compute_route_real(self.origin, self.destination, mode)
-                if result:
-                    candidates.append(result)
-                else:
-                    print(f"   [提醒] {mode} 路線查無搭乘細節可解析")
-            except Exception as e:
-                print(f"   [警告] Routes API 呼叫失敗（{mode}）：{e}")
-
-        if not candidates:
+        # 一般大眾運輸（含替代路線）＋只搭軌道＋步行
+        found = self._fetch("TRANSIT") + self._fetch("TRANSIT", ["SUBWAY", "TRAIN", "LIGHT_RAIL", "RAIL"]) \
+            + self._fetch("WALK")
+        if not found:
             print("   [提醒] 真實路線全部取得失敗，改用假資料候選池")
-            return sorted(MOCK_ROUTE_POOL, key=lambda r: r["total_min"])
+            return self._rank([dict(r) for r in MOCK_ROUTE_POOL])
+        return self._rank(found)
 
-        return sorted(candidates, key=lambda r: r["total_min"])
-
+    # ---------- 切換 ----------
     def get_current_route(self) -> dict:
         return self.candidates[self.current_index]
 
@@ -434,13 +542,75 @@ class RouteSession:
         self.current_index = (self.current_index + 1) % len(self.candidates)
         return self.get_current_route()
 
-    def voice_summary(self, route: dict = None) -> str:
+    def choose_mode(self, pref: str):
+        """
+        切到符合偏好的路線（最快的那條）。候選裡沒有時，真實模式會再向 Google 查一次限定交通工具的路線。
+        找不到回傳 None。
+        """
+        matches = [i for i, r in enumerate(self.candidates) if route_matches(r, pref)]
+        if not matches and USE_REAL_ROUTES:
+            extra = self._fetch("WALK") if pref == "步行" else \
+                self._fetch("TRANSIT", ALLOWED_MODES_FOR.get(pref))
+            extra = [r for r in extra if route_matches(r, pref)]
+            if extra:
+                cur = self.get_current_route()
+                pool = self.candidates + extra
+                for r in pool:
+                    r.setdefault("modes", [r.get("mode")])
+                uniq, seen = [], set()
+                for r in pool:
+                    if self._key(r) not in seen:
+                        seen.add(self._key(r))
+                        uniq.append(r)
+                self.candidates = sorted(uniq, key=lambda r: r["total_min"])
+                self.current_index = self.candidates.index(cur)
+                matches = [i for i, r in enumerate(self.candidates) if route_matches(r, pref)]
+        if not matches:
+            return None
+        self.current_index = min(matches, key=lambda i: self.candidates[i]["total_min"])
+        return self.get_current_route()
+
+    def change_mode(self):
+        """「我想改搭車」「改用走的」這類沒指定工具的講法：換到交通方式不一樣的下一條。"""
+        cur = tuple(self.get_current_route().get("modes") or [])
+        n = len(self.candidates)
+        for step in range(1, n):
+            i = (self.current_index + step) % n
+            if tuple(self.candidates[i].get("modes") or []) != cur:
+                self.current_index = i
+                return self.get_current_route()
+        return self.next_route()
+
+    # ---------- 語音 ----------
+    def options_hint(self) -> str:
+        """告訴使用者還能怎麼選：有幾個方案、候選裡有哪些交通方式。"""
+        n = len(self.candidates)
+        kinds = []
+        for r in self.candidates:
+            for m in (r.get("modes") or []):
+                if m not in kinds and m != "步行":
+                    kinds.append(m)
+        tips = "、".join(f"「搭{m}」" for m in kinds[:3])
+        if n <= 1:
+            return "目前只找到這個方案"
+        hint = f"共有{n}個方案，可以說「換一個」"
+        if tips:
+            hint += f"，或直接說{tips}"
+        return hint
+
+    def voice_summary(self, route: dict = None, with_hint: bool = None) -> str:
+        """with_hint 沒指定時：第一次講才附上「共有幾個方案、可以怎麼選」，之後切換就不重複，比較好聽。"""
         r = route or self.get_current_route()
-        if r["mode"] == "步行":
-            return f"建議{r['mode']}，{r['summary']}，全程約{r['total_min']}分鐘，要開始嗎？"
+        if with_hint is None:
+            with_hint = not getattr(self, "_hint_told", False)
+        self._hint_told = True
+        hint = f"。{self.options_hint()}" if with_hint else ""
+        if (r.get("modes") or [r["mode"]]) == ["步行"]:
+            far = "，路程比較遠，建議搭車" if r["total_min"] > MAX_WALK_MIN else ""
+            return f"建議步行，{r['summary']}，全程約{r['total_min']}分鐘{far}{hint}。要開始嗎？"
         return (
-            f"建議搭{r['mode']}，{r['summary']}，"
-            f"預計{r['wait_min']}分鐘後到站，全程約{r['total_min']}分鐘，要開始嗎？"
+            f"建議搭{modes_phrase(r)}，{r['summary']}，"
+            f"預計{r['wait_min']}分鐘後到站，全程約{r['total_min']}分鐘{hint}。要開始嗎？"
         )
 
 

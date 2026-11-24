@@ -84,6 +84,10 @@ def _start_route_session(chosen_place: dict, lat: float, lng: float) -> str:
     """建立路線候選池、套即時資訊，回傳語音摘要，並把狀態切到「等待確認」"""
     origin = {"lat": lat, "lng": lng}
     session = routing.RouteSession(origin=origin, destination=chosen_place)
+    # 一開始就指定交通方式（「搭捷運去板橋」）：直接挑那種路線
+    pref, prefix = SESSION.pop("mode_pref", None), ""
+    if pref and session.choose_mode(pref) is None:
+        prefix = f"沒有找到搭{pref}的路線。"
     current_route = transit.apply_realtime_to_route(session.get_current_route())
 
     SESSION["chosen_place"] = chosen_place
@@ -91,7 +95,28 @@ def _start_route_session(chosen_place: dict, lat: float, lng: float) -> str:
     SESSION["current_route"] = current_route
     SESSION["stage"] = "awaiting_confirm"
 
-    return session.voice_summary(current_route)
+    return prefix + session.voice_summary(current_route)
+
+
+def _strip_mode_words(dest: str) -> str:
+    """「搭捷運去板橋車站」被解析出的目的地可能夾帶交通方式，查地點前拿掉。"""
+    d = dest or ""
+    for prefix in ("搭捷運去", "坐捷運去", "搭公車去", "坐公車去", "搭火車去", "坐火車去", "走路去"):
+        d = d.replace(prefix, "")
+    return d.strip() or dest
+
+
+def _switch_mode(pref: str) -> dict:
+    """等待確認時說「搭捷運／搭公車／走路」：切到那種路線，找不到就照實說。"""
+    session = SESSION["route_session"]
+    route = session.choose_mode(pref)
+    if route is None:
+        cur = SESSION["current_route"]
+        what = "走路" if pref == "步行" else f"搭{pref}"
+        return _reply(f"不好意思，沒有找到{what}的路線。目前的方案是{routing.modes_phrase(cur, with_verb=True)}，"
+                      f"全程約{cur['total_min']}分鐘。{session.options_hint()}，或說「開始」")
+    SESSION["current_route"] = transit.apply_realtime_to_route(route)
+    return _reply("好的。" + session.voice_summary(SESSION["current_route"]))
 
 
 def _reply(text: str, extra: dict = None) -> dict:
@@ -249,7 +274,7 @@ def _begin_navigation() -> tuple:
             reply = "好的，開始導航"
         return reply, steps
 
-    if route["mode"] in ("公車", "捷運", "火車", "高鐵") and route.get("departure_stop"):
+    if (route.get("modes") or [route["mode"]]) != ["步行"] and route.get("departure_stop"):
         SESSION["legs"] = routing.get_transit_legs(route)
         SESSION["leg_index"] = 0
         reply, steps = _proceed_to_current_leg(prefix="好的，開始導航。")
@@ -316,7 +341,8 @@ def api_command(data: dict = Body(default={})):
             return _reply("不好意思，我沒聽懂，你可以說「導航去...」")
 
         location_bias = {"lat": lat, "lng": lng} if lat is not None and lng is not None else None
-        result = places.disambiguate(intent["destination"], location_bias=location_bias)
+        SESSION["mode_pref"] = routing.detect_mode_preference(text)
+        result = places.disambiguate(_strip_mode_words(intent["destination"]), location_bias=location_bias)
 
         if result["status"] == "not_found":
             return _reply(result["voice_prompt"])
@@ -354,8 +380,13 @@ def api_command(data: dict = Body(default={})):
 
     # === 階段：路線摘要已講完，等待確認/換一個/改交通方式/取消 ===
     if stage == "awaiting_confirm":
-        intent = nlu.parse_intent(text)
         session = SESSION["route_session"]
+        # 先看有沒有指定交通方式（不用打 LLM，也避免「搭捷運好了」裡的「好」被當成確認開始）
+        pref = routing.detect_mode_preference(text)
+        if pref and not any(k in text for k in nlu.CANCEL_KEYWORDS):
+            return _switch_mode(pref)
+
+        intent = nlu.parse_intent(text)
 
         if intent["intent"] == "next_option":
             SESSION["current_route"] = transit.apply_realtime_to_route(session.next_route())
@@ -366,15 +397,14 @@ def api_command(data: dict = Body(default={})):
             return _reply("好的，已取消導航")
 
         if intent["intent"] == "change_mode":
-            SESSION["current_route"] = transit.apply_realtime_to_route(session.next_route())
-            reply = "好的，正在為你重新規劃交通方式...。" + session.voice_summary(SESSION["current_route"])
-            return _reply(reply)
+            SESSION["current_route"] = transit.apply_realtime_to_route(session.change_mode())
+            return _reply("好的，換一種交通方式。" + session.voice_summary(SESSION["current_route"]))
 
         if any(kw in text for kw in CONFIRM_START_KEYWORDS):
             reply, walk_steps = _begin_navigation()
             return _reply(reply, extra={"walk_steps": walk_steps})
 
-        return _reply("不好意思，我沒聽懂，你可以說「換一個」、「開始」或「取消」")
+        return _reply("不好意思，我沒聽懂，你可以說「開始」、「換一個」、「搭捷運」、「搭公車」、「走路」或「取消」")
 
     # === 以下幾個階段是「移動中」的狀態：這幾個階段的路段推進
     #     現在改由前端用GPS自動觸發（呼叫 /api/segment_complete），
